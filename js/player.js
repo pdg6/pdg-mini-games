@@ -1,0 +1,237 @@
+// Player state and logic
+const player = {
+    x: 50, 
+    y: 500, 
+    width: 28, 
+    height: 32,
+    dx: 0, 
+    dy: 0, 
+    jumping: false, 
+    grounded: false,
+    facing: 1, 
+    lastGroundedTime: 0, 
+    jumpBufferTime: 0, 
+    trail: [],
+    // Dash state
+    isDashing: false,
+    dashTime: 0,
+    dashBufferTime: 0,
+    lastDashTime: 0,
+    dashDirection: 1,
+    // Wall state
+    touchingWall: 0, // -1 left, 0 none, 1 right
+    wallClingStart: 0,
+    isWallSliding: false,
+    lastWallJumpTime: 0
+};
+
+function resetPlayer(startPos) {
+    player.x = startPos.x;
+    player.y = startPos.y;
+    player.dx = 0;
+    player.dy = 0;
+    player.jumping = false;
+    player.grounded = false;
+    player.trail = [];
+    player.isDashing = false;
+    player.dashTime = 0;
+    player.lastDashTime = 0;
+    player.touchingWall = 0;
+    player.isWallSliding = false;
+}
+
+function updatePlayer(gameState, keys) {
+    if (gameState !== 'playing') return;
+    const now = performance.now();
+    
+    // Get aggregated input from all sources (keyboard, gamepad, touch)
+    const input = getAggregatedInput();
+    
+    // ============ DASH HANDLING ============
+    const hasDashBuffer = (now - player.dashBufferTime) < JUMP_BUFFER;
+    const canDash = (now - player.lastDashTime) > DASH_COOLDOWN;
+    
+    if ((input.dash || hasDashBuffer) && canDash && !player.isDashing) {
+        player.isDashing = true;
+        player.dashTime = now;
+        player.lastDashTime = now;
+        player.dashBufferTime = 0;
+        player.dashDirection = player.facing;
+        player.dy = 0; // Cancel vertical momentum
+        playSound('dash');
+        
+        // Spawn dash particles
+        for (let i = 0; i < 5; i++) {
+            spawnParticle(
+                player.x + player.width / 2, 
+                player.y + player.height / 2, 
+                'jump'
+            );
+        }
+    }
+    
+    // During dash
+    if (player.isDashing) {
+        if (now - player.dashTime < DASH_DURATION) {
+            player.dx = DASH_SPEED * player.dashDirection;
+            player.dy = 0; // No gravity during dash
+            
+            // Dash trail
+            player.trail.push({ 
+                x: player.x + player.width / 2, 
+                y: player.y + player.height / 2, 
+                life: 1,
+                dash: true 
+            });
+        } else {
+            player.isDashing = false;
+            player.dx = MAX_SPEED * player.dashDirection; // Maintain some momentum
+        }
+    }
+    
+    // ============ HORIZONTAL MOVEMENT ============
+    if (!player.isDashing) {
+        // Use different acceleration in air vs ground
+        const accel = player.grounded ? GROUND_ACCELERATION : AIR_ACCELERATION;
+        const friction = player.grounded ? FRICTION : AIR_FRICTION;
+        
+        if (input.rawMoveX > 0) {
+            player.dx += accel * Math.abs(input.moveX);
+            if (player.dx > MAX_SPEED) player.dx = MAX_SPEED;
+            player.facing = 1;
+        } else if (input.rawMoveX < 0) {
+            player.dx -= accel * Math.abs(input.moveX);
+            if (player.dx < -MAX_SPEED) player.dx = -MAX_SPEED;
+            player.facing = -1;
+        } else {
+            player.dx *= friction;
+        }
+    }
+    
+    // ============ WALL SLIDE/JUMP ============
+    const timeSinceWallJump = now - player.lastWallJumpTime;
+    
+    if (player.touchingWall !== 0 && !player.grounded && timeSinceWallJump > 200) {
+        // Check if player is pushing towards wall
+        const pushingTowardsWall = (player.touchingWall === 1 && input.rawMoveX > 0) ||
+                                   (player.touchingWall === -1 && input.rawMoveX < 0);
+        
+        if (pushingTowardsWall && player.dy > 0) {
+            // Wall cling then slide
+            if (player.wallClingStart === 0) {
+                player.wallClingStart = now;
+            }
+            
+            if (now - player.wallClingStart > WALL_CLING_TIME) {
+                player.isWallSliding = true;
+                player.dy = WALL_SLIDE_SPEED;
+            } else {
+                player.dy = 0; // Cling to wall briefly
+            }
+        }
+    } else {
+        player.wallClingStart = 0;
+        player.isWallSliding = false;
+    }
+    
+    // ============ JUMPING ============
+    const canCoyoteJump = (now - player.lastGroundedTime) < COYOTE_TIME;
+    const hasJumpBuffer = (now - player.jumpBufferTime) < JUMP_BUFFER;
+    const canWallJump = player.touchingWall !== 0 && !player.grounded;
+    
+    if ((input.jump || hasJumpBuffer)) {
+        // Regular jump
+        if (!player.jumping && (player.grounded || canCoyoteJump)) {
+            player.dy = JUMP_FORCE;
+            player.jumping = true;
+            player.grounded = false;
+            player.jumpBufferTime = 0;
+            playSound('jump');
+            spawnParticle(player.x + player.width / 2, player.y + player.height, 'jump');
+        }
+        // Wall jump
+        else if (canWallJump && hasJumpBuffer) {
+            player.dy = WALL_JUMP_FORCE_Y;
+            player.dx = WALL_JUMP_FORCE_X * -player.touchingWall; // Jump away from wall
+            player.jumping = true;
+            player.jumpBufferTime = 0;
+            player.lastWallJumpTime = now;
+            player.facing = -player.touchingWall;
+            player.touchingWall = 0;
+            player.isWallSliding = false;
+            playSound('walljump');
+            spawnParticle(player.x + player.width / 2, player.y + player.height / 2, 'jump');
+        }
+    }
+    
+    // Variable jump height
+    if (!input.jump && player.dy < -4) {
+        player.dy = -4;
+    }
+    
+    // ============ PHYSICS ============
+    if (!player.isDashing) {
+        // Apply gravity (reduced during wall slide)
+        const gravityMod = player.isWallSliding ? 0.3 : 1;
+        player.dy += GRAVITY * gravityMod;
+        if (player.dy > 15) player.dy = 15;
+    }
+    
+    // Apply velocity
+    player.x += player.dx;
+    player.y += player.dy;
+    
+    // ============ TRAIL ============
+    if (Math.abs(player.dx) > 1 || Math.abs(player.dy) > 1) {
+        player.trail.push({ x: player.x + player.width / 2, y: player.y + player.height / 2, life: 1 });
+        if (player.trail.length > 12) player.trail.shift();
+    }
+    player.trail.forEach(t => t.life -= 0.08);
+    player.trail = player.trail.filter(t => t.life > 0);
+    
+    player.grounded = false;
+    player.touchingWall = 0;
+}
+
+function drawPlayer(ctx) {
+    // Draw trail
+    player.trail.forEach(t => {
+        const color = t.dash ? 'rgba(255, 100, 50, ' : 'rgba(0, 255, 204, ';
+        ctx.fillStyle = color + (t.life * 0.4) + ')';
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, (t.dash ? 8 : 5) * t.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // Draw player body with glow
+    ctx.shadowColor = player.isDashing ? '#ff6600' : (player.isWallSliding ? '#ffcc00' : '#00ffcc');
+    ctx.shadowBlur = player.isDashing ? 20 : 10;
+    
+    ctx.fillStyle = player.isDashing ? '#ff6600' : '#00ffcc';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = player.isDashing ? '#cc4400' : '#008888';
+    ctx.fillRect(player.x + 4, player.y + 4, player.width - 8, player.height - 8);
+    
+    // Draw eyes
+    const eyeX = player.facing === 1 ? player.x + 16 : player.x + 6;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(eyeX, player.y + 10, 6, 6);
+    ctx.fillRect(eyeX - (player.facing === 1 ? 10 : -10), player.y + 10, 6, 6);
+    
+    // Draw pupils
+    const pupilOffset = player.facing * 2;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(eyeX + 2 + pupilOffset, player.y + 12, 2, 2);
+    ctx.fillRect(eyeX - (player.facing === 1 ? 10 : -10) + 2 + pupilOffset, player.y + 12, 2, 2);
+    
+    // Wall slide indicator
+    if (player.isWallSliding) {
+        ctx.fillStyle = 'rgba(255, 204, 0, 0.5)';
+        const sparkX = player.touchingWall === 1 ? player.x + player.width : player.x;
+        for (let i = 0; i < 3; i++) {
+            ctx.fillRect(sparkX - 2, player.y + 5 + i * 10, 4, 4);
+        }
+    }
+}

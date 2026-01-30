@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0a0a0a 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: 'Press Start 2P', monospace;
+}
+
+#game-container {
+    position: relative;
+    border: 4px solid #ff4400;
+    box-shadow: 
+        0 0 20px rgba(255, 68, 0, 0.5),
+        0 0 40px rgba(255, 68, 0, 0.3),
+        inset 0 0 60px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+}
+
+canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+#scanlines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15),
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+    );
+    pointer-events: none;
+    z-index: 10;
+}
+
+#crt-flicker {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    pointer-events: none;
+    z-index: 11;
+    animation: flicker 0.15s infinite;
+}
+
+@keyframes flicker {
+    0% { opacity: 0.27; }
+    10% { opacity: 0.32; }
+    20% { opacity: 0.27; }
+    30% { opacity: 0.35; }
+    40% { opacity: 0.27; }
+    50% { opacity: 0.30; }
+    60% { opacity: 0.27; }
+    70% { opacity: 0.33; }
+    80% { opacity: 0.27; }
+    90% { opacity: 0.31; }
+    100% { opacity: 0.27; }
+}
+
+#ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    color: #fff;
+    font-size: 12px;
+    text-shadow: 2px 2px 0 #000, 0 0 10px rgba(255, 68, 0, 0.8);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.ui-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.heart {
+    color: #ff3366;
+    text-shadow: 0 0 10px #ff3366;
+}
+
+.coin-icon {
+    color: #ffcc00;
+    text-shadow: 0 0 10px #ffcc00;
+}
+
+#overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 20;
+    text-align: center;
+}
+
+#overlay.hidden {
+    display: none;
+}
+
+#overlay h1 {
+    font-size: 32px;
+    color: #ff4400;
+    text-shadow: 
+        0 0 10px #ff4400,
+        0 0 20px #ff4400,
+        0 0 40px #ff4400;
+    margin-bottom: 20px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+#overlay h2 {
+    font-size: 20px;
+    color: #ff4400;
+    text-shadow: 0 0 20px #ff4400;
+    margin-bottom: 20px;
+}
+
+#overlay p {
+    font-size: 10px;
+    color: #aaa;
+    margin: 10px 0;
+}
+
+#overlay .highlight {
+    color: #00ffcc;
+    text-shadow: 0 0 10px #00ffcc;
+}
+
+#overlay .fire-text {
+    color: #ff4400;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.blink {
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+#level-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px;
+    color: #00ffcc;
+    text-shadow: 0 0 20px #00ffcc;
+    z-index: 15;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s;
+}
+
+/* ============ TOUCH CONTROLS ============ */
+#touch-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 140px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 15px;
+    pointer-events: none;
+    z-index: 25;
+}
+
+.touch-left,
+.touch-right {
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.touch-right {
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.touch-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    color: #fff;
+    background: rgba(255, 68, 0, 0.3);
+    border: 3px solid rgba(255, 68, 0, 0.6);
+    border-radius: 12px;
+    padding: 20px 25px;
+    text-shadow: 0 0 10px rgba(255, 68, 0, 0.8);
+    box-shadow: 
+        0 0 15px rgba(255, 68, 0, 0.3),
+        inset 0 0 20px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: all 0.1s;
+}
+
+.touch-btn:active,
+.touch-btn.active {
+    background: rgba(255, 68, 0, 0.6);
+    border-color: #ff4400;
+    transform: scale(0.95);
+    box-shadow: 
+        0 0 25px rgba(255, 68, 0, 0.6),
+        inset 0 0 30px rgba(255, 100, 0, 0.3);
+}
+
+.touch-large {
+    padding: 25px 35px;
+    font-size: 14px;
+}
+
+.touch-small {
+    padding: 12px 20px;
+    font-size: 10px;
+    background: rgba(0, 255, 204, 0.2);
+    border-color: rgba(0, 255, 204, 0.5);
+}
+
+.touch-small:active,
+.touch-small.active {
+    background: rgba(0, 255, 204, 0.5);
+    border-color: #00ffcc;
+    box-shadow: 
+        0 0 25px rgba(0, 255, 204, 0.6),
+        inset 0 0 30px rgba(0, 255, 204, 0.3);
+}
+
+/* Hide touch controls on non-touch devices */
+@media (hover: hover) and (pointer: fine) {
+    #touch-controls {
+        display: none;
+    }
+}
+
+/* Dash cooldown indicator */
+.dash-indicator {
+    color: #00ffcc;
+    text-shadow: 0 0 10px #00ffcc;
+}
+
+.dash-indicator.on-cooldown {
+    color: #666;
+    text-shadow: none;
+}
