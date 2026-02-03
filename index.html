@@ -3,67 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>INFERNO RUN</title>
+    <title>Arcade Hub - Retro Mini Games</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
-    <div id="game-container">
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="scanlines"></div>
-        <div id="crt-flicker"></div>
-        
-        <div id="ui">
-            <div class="ui-item">
-                <span class="heart">&#9829;&#9829;&#9829;</span>
-            </div>
-            <div class="ui-item">
-                <span id="level-display">LEVEL 1</span>
-            </div>
-            <div class="ui-item">
-                <span class="coin-icon">&#9670;</span>
-                <span id="score">0</span>
-            </div>
-        </div>
+<body class="portal-body">
+    <div id="scanlines"></div>
+    <div id="crt-flicker"></div>
+    
+    <div class="portal-wrapper">
+        <nav class="portal-nav">
+            <div class="logo">ARCADE_HUB</div>
+            <ul class="nav-links">
+                <li><a href="#" class="active">GAMES</a></li>
+                <li><a href="#">HIGH SCORES</a></li>
+                <li><a href="#">ABOUT</a></li>
+            </ul>
+        </nav>
 
-        <div id="level-banner">LEVEL 1</div>
+        <header class="portal-header">
+            <h1>SELECT YOUR CHALLENGE</h1>
+            <p>Pick a game and start playing!</p>
+        </header>
 
-        <div id="overlay">
-            <h1>INFERNO RUN</h1>
-            <p>Navigate the flames to reach the exit!</p>
-            <p style="margin-top: 20px;">
-                <span class="highlight">WASD</span> or <span class="highlight">ARROWS</span> to move
-            </p>
-            <p>
-                <span class="highlight">SPACE</span> to jump &nbsp;|&nbsp; <span class="highlight">SHIFT</span> to dash
-            </p>
-            <p style="margin-top: 10px; font-size: 8px; color: #888;">
-                Wall jump by pressing jump while sliding on walls
-            </p>
-            <p style="margin-top: 15px; font-size: 8px; color: #888;">
-                🎮 Gamepad supported! &nbsp;|&nbsp; 📱 Touch controls on mobile
-            </p>
-            <p style="margin-top: 20px;">
-                Collect <span class="coin-icon">&#9670;</span> coins for bonus points
-            </p>
-            <p>
-                Avoid the <span class="fire-text">FIRE</span> (dash through it!)
-            </p>
-            <p class="blink" style="margin-top: 40px; color: #fff;">
-                PRESS SPACE TO START
-            </p>
-        </div>
+        <main class="game-grid">
+            <!-- Game 1: Inferno Run -->
+            <a href="Inferno Run/inferno-run.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #ff4400, #ff8800);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">🔥</div>
+                </div>
+                <div class="tile-info">
+                    <h3>INFERNO RUN</h3>
+                    <p>Navigate the flames to reach the exit!</p>
+                </div>
+            </a>
+
+            <!-- Game 2 -->
+            <a href="Cyber-Chase/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #0044ff, #0088ff);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">🧊</div>
+                </div>
+                <div class="tile-info">
+                    <h3>CYBER CHASE</h3>
+                    <p>Escape the digital hunters in this fast runner.</p>
+                </div>
+            </a>
+
+            <!-- Game 3 -->
+            <a href="Space-Defender/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #00ff44, #00ff88);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">🛸</div>
+                </div>
+                <div class="tile-info">
+                    <h3>SPACE DEFENDER</h3>
+                    <p>Protect the galaxy from alien waves.</p>
+                </div>
+            </a>
+
+            <!-- Game 4 -->
+            <a href="Pixel-Puzzle/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #ff00ff, #ff88ff);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">🧩</div>
+                </div>
+                <div class="tile-info">
+                    <h3>PIXEL PUZZLE</h3>
+                    <p>A brain-teasing retro puzzle experience.</p>
+                </div>
+            </a>
+
+            <!-- Game 5 -->
+            <a href="Void-Bounce/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #4400ff, #8800ff);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">⚪</div>
+                </div>
+                <div class="tile-info">
+                    <h3>VOID BOUNCE</h3>
+                    <p>Master physics to clear the stage.</p>
+                </div>
+            </a>
+
+            <!-- Game 6 -->
+            <a href="Neon-Drift/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #ffff00, #ff8800);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">🏎️</div>
+                </div>
+                <div class="tile-info">
+                    <h3>NEON DRIFT</h3>
+                    <p>High-speed top-down racing action.</p>
+                </div>
+            </a>
+
+            <!-- Game 7 -->
+            <a href="Gravity-Flip/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #00ffff, #0088ff);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">↕️</div>
+                </div>
+                <div class="tile-info">
+                    <h3>GRAVITY FLIP</h3>
+                    <p>Flip the world upside down to survive.</p>
+                </div>
+            </a>
+
+            <!-- Game 8 -->
+            <a href="Bullet-Storm/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #ff0044, #ff0000);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">☄️</div>
+                </div>
+                <div class="tile-info">
+                    <h3>BULLET STORM</h3>
+                    <p>Dodge thousands of projectiles at once.</p>
+                </div>
+            </a>
+
+            <!-- Game 9 -->
+            <a href="Shadow-Sneak/index.html" class="game-tile">
+                <div class="tile-image" style="background: linear-gradient(45deg, #333333, #000000);">
+                    <div class="tile-overlay">
+                        <span>PLAY NOW</span>
+                    </div>
+                    <div class="pixel-art-icon">👤</div>
+                </div>
+                <div class="tile-info">
+                    <h3>SHADOW SNEAK</h3>
+                    <p>Infiltrate the base without being seen.</p>
+                </div>
+            </a>
+        </main>
+
+        <footer class="portal-footer">
+            <p>&copy; 2026 RETRO ARCADE HUB | v1.0.0</p>
+        </footer>
     </div>
 
-    <!-- Game Scripts (order matters for dependencies) -->
-    <script src="js/constants.js"></script>
-    <script src="js/audio.js"></script>
-    <script src="js/levels.js"></script>
-    <script src="js/particles.js"></script>
-    <script src="js/player.js"></script>
-    <script src="js/entities.js"></script>
-    <script src="js/rendering.js"></script>
-    <script src="js/input.js"></script>
-    <script src="js/collisions.js"></script>
-    <script src="js/game.js"></script>
 </body>
 </html>
