@@ -18,10 +18,19 @@ class Engine {
         this.particles = [];
         this.gameName = '';
 
+        // Audio System Integration
+        this.audioEnabled = false;
+
         window.addEventListener('keydown', e => {
             this.keys[e.code] = true;
             // Prevent scrolling
             if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+            
+            // Auto-enable audio on first interaction
+            if (!this.audioEnabled && typeof initAudio === 'function') {
+                initAudio();
+                this.audioEnabled = true;
+            }
         });
         window.addEventListener('keyup', e => {
             this.keys[e.code] = false;
@@ -114,6 +123,14 @@ class Engine {
             
             this.ctx.restore();
 
+            // Chromatic Aberration Effect on Gameover
+            if (this.state === 'GAMEOVER') {
+                this.ctx.globalCompositeOperation = 'screen';
+                this.ctx.drawImage(this.canvas, 2, 0); // Red shift
+                this.ctx.drawImage(this.canvas, -2, 0); // Cyan shift
+                this.ctx.globalCompositeOperation = 'source-over';
+            }
+
             // UI Overlay
             this.drawUI(this.ctx);
 
@@ -162,9 +179,42 @@ class Engine {
         this.particles.forEach(p => {
             ctx.globalAlpha = p.life;
             ctx.fillStyle = p.color;
-            ctx.fillRect(p.x, p.y, p.size, p.size);
+            if (p.isSpark) {
+                // Directional spark
+                ctx.beginPath();
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2;
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p.x - p.vx * 3, p.y - p.vy * 3);
+                ctx.stroke();
+            } else {
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+            }
         });
         ctx.globalAlpha = 1.0;
+    }
+
+    spawnSpark(x, y, color, count = 5, speed = 4) {
+        for(let i=0; i<count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const vel = (Math.random() + 0.5) * speed;
+            this.particles.push({
+                x, y,
+                vx: Math.cos(angle) * vel,
+                vy: Math.sin(angle) * vel,
+                life: 1.0,
+                color,
+                isSpark: true,
+                size: 1 + Math.random() * 2
+            });
+        }
+    }
+
+    // New: Screen Flash (Chromatic Aberration Trigger)
+    flash(duration = 500) {
+        this.flashTimer = duration;
+        this.addShake(10);
+    }
     }
 
     drawUI(ctx) {

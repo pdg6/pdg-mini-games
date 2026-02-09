@@ -12,36 +12,21 @@ let difficulty = 1;
 let grazeCombo = 0;
 let grazeTimer = 0;
 
+// Dash/Ability
+let dashCooldown = 0;
+let dashTime = 0;
+const DASH_DURATION = 150;
+const DASH_COOLDOWN = 600;
+
 const PATTERNS = {
-    SPIRAL: 0,
-    BURST: 1,
-    WAVE: 2,
-    CROSS: 3
+    SPIRAL: 0, BURST: 1, WAVE: 2, CROSS: 3
 };
 
-function drawCore(ctx, x, y) {
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = '#fff';
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0;
-    
-    // Rotating shield bits
-    let t = engine.lastTime / 200;
-    ctx.fillStyle = '#ff0044';
-    for(let i=0; i<3; i++) {
-        let ax = x + Math.cos(t + i*2) * 15;
-        let ay = y + Math.sin(t + i*2) * 15;
-        ctx.beginPath(); ctx.arc(ax, ay, 3, 0, Math.PI*2); ctx.fill();
-    }
-    
-    // Graze combo indicator
-    if (grazeCombo > 5) {
-        ctx.font = '10px "Press Start 2P"';
-        ctx.fillStyle = `hsl(${grazeCombo * 10}, 100%, 70%)`;
-        ctx.textAlign = 'center';
-        ctx.fillText(`x${grazeCombo}`, x, y - 20);
-    }
+function setup() {
+    player.x = 400; player.y = 500;
+    bullets = [];
+    timer = 0; patternTimer = 0; pattern = 0; patternDuration = 0;
+    difficulty = 1; grazeCombo = 0; grazeTimer = 0; dashCooldown = 0;
 }
 
 function spawnPattern(angle) {
@@ -53,8 +38,7 @@ function spawnPattern(angle) {
                     x: 400, y: 100, 
                     vx: Math.cos(angle + i*Math.PI/2) * spd, 
                     vy: Math.sin(angle + i*Math.PI/2) * spd,
-                    color: `hsl(${(angle * 60) % 360}, 100%, 70%)`,
-                    grazed: false
+                    color: `hsl(${(angle * 60) % 360}, 100%, 70%)`, grazed: false
                 });
             }
             break;
@@ -62,22 +46,16 @@ function spawnPattern(angle) {
             for(let i=0; i<8; i++) {
                 let a = (i / 8) * Math.PI * 2;
                 bullets.push({
-                    x: 400, y: 300,
-                    vx: Math.cos(a) * (spd + 1),
-                    vy: Math.sin(a) * (spd + 1),
-                    color: `hsl(${i * 45}, 100%, 70%)`,
-                    grazed: false
+                    x: 400, y: 300, vx: Math.cos(a) * (spd + 1), vy: Math.sin(a) * (spd + 1),
+                    color: `hsl(${i * 45}, 100%, 70%)`, grazed: false
                 });
             }
             break;
         case PATTERNS.WAVE:
             for(let i=0; i<3; i++) {
                 bullets.push({
-                    x: 100 + i * 300, y: -10,
-                    vx: Math.sin(angle + i) * 2,
-                    vy: spd,
-                    color: `hsl(${200 + i * 40}, 100%, 70%)`,
-                    grazed: false
+                    x: 100 + i * 300, y: -10, vx: Math.sin(angle + i) * 2, vy: spd,
+                    color: `hsl(${200 + i * 40}, 100%, 70%)`, grazed: false
                 });
             }
             break;
@@ -86,12 +64,9 @@ function spawnPattern(angle) {
                 let a = angle + i * Math.PI/2;
                 for(let j=1; j<=2; j++) {
                     bullets.push({
-                        x: 400 + Math.cos(a) * j * 30, 
-                        y: 100 + Math.sin(a) * j * 30,
-                        vx: Math.cos(a) * spd * 0.8,
-                        vy: Math.sin(a) * spd * 0.8 + 1,
-                        color: `hsl(${(a * 90) % 360}, 100%, 70%)`,
-                        grazed: false
+                        x: 400 + Math.cos(a) * j * 30, y: 100 + Math.sin(a) * j * 30,
+                        vx: Math.cos(a) * spd * 0.8, vy: Math.sin(a) * spd * 0.8 + 1,
+                        color: `hsl(${(a * 90) % 360}, 100%, 70%)`, grazed: false
                     });
                 }
             }
@@ -99,47 +74,63 @@ function spawnPattern(angle) {
     }
 }
 
-engine.start(() => {
-    player.x = 400; player.y = 500;
-    bullets = [];
-    timer = 0;
-    patternTimer = 0;
-    pattern = 0;
-    patternDuration = 0;
-    difficulty = 1;
-    grazeCombo = 0;
-    grazeTimer = 0;
-}, (dt) => {
+function drawCore(ctx, x, y) {
+    Assets.renderPlayer(ctx, x - 10, y - 10, 20, 20, {
+        rotation: engine.lastTime / 500,
+        state: 'idle'
+    });
+    let t = engine.lastTime / 200;
+    ctx.fillStyle = Assets.COLORS.secondary;
+    for(let i=0; i<3; i++) {
+        let ax = x + Math.cos(t + i*2) * 20;
+        let ay = y + Math.sin(t + i*2) * 20;
+        ctx.beginPath(); ctx.arc(ax, ay, 3, 0, Math.PI*2); ctx.fill();
+    }
+}
+
+engine.start(setup, (dt) => {
     const factor = dt / 16.67;
+    const now = performance.now();
     let speed = 4 * factor;
-    if (engine.keys['ShiftLeft'] || engine.keys['ShiftRight']) speed = 2 * factor;
-    if (engine.keys['ArrowUp'] || engine.keys['KeyW']) player.y -= speed;
-    if (engine.keys['ArrowDown'] || engine.keys['KeyS']) player.y += speed;
-    if (engine.keys['ArrowLeft'] || engine.keys['KeyA']) player.x -= speed;
-    if (engine.keys['ArrowRight'] || engine.keys['KeyD']) player.x += speed;
+
+    const isFocused = engine.keys['ShiftLeft'] || engine.keys['ShiftRight'];
+    if (isFocused) speed = 2 * factor;
+
+    if (engine.justPressed('KeyZ') || engine.justPressed('Space')) {
+        if (now > dashCooldown) {
+            dashTime = now;
+            dashCooldown = now + DASH_COOLDOWN;
+            playSound('dash');
+            for(let i=0; i<10; i++) engine.spawnSpark(player.x, player.y, Assets.COLORS.accent);
+        }
+    }
+
+    const isDashing = now < dashTime + DASH_DURATION;
+
+    if (engine.isDown('ArrowUp') || engine.isDown('KeyW')) player.y -= speed * (isDashing ? 2 : 1);
+    if (engine.isDown('ArrowDown') || engine.isDown('KeyS')) player.y += speed * (isDashing ? 2 : 1);
+    if (engine.isDown('ArrowLeft') || engine.isDown('KeyA')) player.x -= speed * (isDashing ? 2 : 1);
+    if (engine.isDown('ArrowRight') || engine.isDown('KeyD')) player.x += speed * (isDashing ? 2 : 1);
+    
     player.x = Math.max(10, Math.min(790, player.x));
     player.y = Math.max(10, Math.min(590, player.y));
 
-    // Difficulty ramp
     difficulty = 1 + engine.score / 500;
-
-    // Pattern switching
     patternDuration += dt;
-    if (patternDuration > 5000) {
+    if (patternDuration > 4000) {
         pattern = (pattern + 1) % 4;
         patternDuration = 0;
+        playSound('levelup');
     }
 
-    timer += dt;
-    patternTimer += dt;
-    const spawnRate = Math.max(30, 60 - difficulty * 3);
+    timer += dt; patternTimer += dt;
+    const spawnRate = Math.max(25, 50 - difficulty * 3);
     if (timer > spawnRate) {
-        let angle = patternTimer / 200;
+        let angle = patternTimer / 150;
         spawnPattern(angle);
         timer = 0;
     }
 
-    // Graze timer decay
     grazeTimer -= dt;
     if (grazeTimer <= 0) {
         grazeCombo = 0;
@@ -148,47 +139,49 @@ engine.start(() => {
 
     let hit = false;
     bullets.forEach(b => {
-        b.x += b.vx * factor; 
-        b.y += b.vy * factor;
-        let dist = Math.hypot(player.x - b.x, player.y - b.y);
-        // Graze scoring (once per bullet)
-        if (dist < 25 && dist > 8 && !b.grazed) {
-            b.grazed = true;
-            grazeCombo++;
-            grazeTimer = 1000;
-            engine.score += Math.min(grazeCombo, 20);
-        }
-        if (dist < 6) {
-            hit = true;
-            engine.addShake(20);
-            engine.spawnParticle(player.x, player.y, '#fff', 30);
+        b.x += b.vx * factor; b.y += b.vy * factor;
+        const dx = b.x - player.x, dy = b.y - player.y;
+        const d2 = dx*dx + dy*dy;
+
+        if (!isDashing && d2 < 16) hit = true;
+        else if (d2 < 625 && !b.grazed) {
+            b.grazed = true; grazeCombo++; grazeTimer = 1000;
+            engine.score += 5 + Math.floor(grazeCombo / 10);
+            if (grazeCombo % 10 === 0) playSound('coin');
+            engine.spawnSpark(player.x, player.y, b.color);
         }
     });
-    if (hit) engine.state = 'GAMEOVER';
-    bullets = bullets.filter(b => b.x > -50 && b.x < 850 && b.y > -50 && b.y < 650);
-}, (ctx) => {
-    // Background - subtle radial grid
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 1;
-    for(let r = 50; r < 500; r += 80) {
-        ctx.beginPath(); ctx.arc(400, 300, r, 0, Math.PI*2); ctx.stroke();
-    }
 
-    drawCore(ctx, player.x, player.y);
-    // Bullets - Glowing Orbs
+    if (hit) {
+        engine.addShake(20); playSound('death'); engine.state = 'GAMEOVER';
+        for(let i=0; i<30; i++) engine.spawnSpark(player.x, player.y, Assets.COLORS.primary);
+    }
+    bullets = bullets.filter(b => b.y > -50 && b.y < 650 && b.x > -50 && b.x < 850);
+}, (ctx) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    for(let i=0; i<20; i++) {
+        let sx = (i * 123) % 800, sy = (engine.lastTime / (10 + (i%5)) + i*50) % 600;
+        ctx.fillRect(sx, sy, 2, 2);
+    }
     bullets.forEach(b => {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = b.color;
-        ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = b.color; ctx.shadowBlur = 4; ctx.shadowColor = b.color;
         ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill();
     });
-    ctx.globalCompositeOperation = 'source-over';
-
-    // Pattern indicator
-    ctx.font = '8px "Press Start 2P"';
-    ctx.fillStyle = '#555';
-    ctx.textAlign = 'left';
-    const names = ['SPIRAL','BURST','WAVE','CROSS'];
-    ctx.fillText(names[pattern], 10, 590);
+    ctx.shadowBlur = 0;
+    if (performance.now() < dashTime + DASH_DURATION) {
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(player.x, player.y, 15, 0, Math.PI*2); ctx.stroke();
+    }
+    drawCore(ctx, player.x, player.y);
+    if (engine.isDown('ShiftLeft') || engine.isDown('ShiftRight')) {
+        ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(player.x, player.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
+    engine.drawParticles();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Courier New';
+    ctx.fillText(`SCORE: ${engine.score}`, 20, 30);
+    ctx.fillText(`GRAZE: ${grazeCombo}`, 20, 55);
+    ctx.fillStyle = '#222'; ctx.fillRect(20, 70, 60, 4);
+    const cdPct = Math.max(0, (dashCooldown - performance.now()) / DASH_COOLDOWN);
+    ctx.fillStyle = cdPct > 0 ? '#444' : Assets.COLORS.accent;
+    ctx.fillRect(20, 70, 60 * (1 - cdPct), 4);
 });

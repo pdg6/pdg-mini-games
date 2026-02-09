@@ -1,5 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
+:root {
+    --primary: #00ffcc;
+    --secondary: #ff0055;
+    --tertiary: #00ffff;
+    --highlight: #ffcc00;
+    --danger: #ff4400;
+    --void: #050505;
+    --neutral: #ffffff;
+    --stealth: #222222;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -7,7 +18,8 @@
 }
 
 body {
-    background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0a0a0a 100%);
+    background: var(--void);
+    background-image: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0a0a0a 100%);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -18,10 +30,10 @@ body {
 
 #game-container {
     position: relative;
-    border: 4px solid #ff4400;
+    border: 4px solid var(--primary);
     box-shadow: 
-        0 0 20px rgba(255, 68, 0, 0.5),
-        0 0 40px rgba(255, 68, 0, 0.3),
+        0 0 20px rgba(0, 255, 204, 0.5),
+        0 0 40px rgba(0, 255, 204, 0.3),
         inset 0 0 60px rgba(0, 0, 0, 0.5);
     border-radius: 4px;
 }

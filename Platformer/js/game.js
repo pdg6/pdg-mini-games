@@ -1,276 +1,167 @@
 const engine = new Engine('gameCanvas');
-engine.gameName = 'alpine-rush';
+engine.gameName = 'neon-leap';
 engine.loadHighScore();
 
 class Terrain {
     constructor() {
         this.points = [];
         this.scroll = 0;
-        this.segmentWidth = 50;
-        this.lastY = 300;
+        this.segmentWidth = 80;
+        this.lastY = 400;
         this.obstacles = [];
-        this.clouds = [];
-        this.spawnTimer = 0;
+        this.beams = [];
         
-        // Initial terrain
-        for(let i = 0; i < 20; i++) {
+        for(let i = 0; i < 15; i++) {
             this.generatePoint();
         }
     }
 
     generatePoint() {
-        // Bias towards going down (skiing!)
-        const dy = (Math.random() - 0.35) * 60; 
+        const dy = (Math.random() - 0.5) * 150; 
         this.lastY += dy;
-        this.lastY = Math.max(150, Math.min(550, this.lastY));
+        this.lastY = Math.max(200, Math.min(500, this.lastY));
         this.points.push(this.lastY);
     }
 
     update(speed, dt) {
         this.scroll += speed;
         
-        // Background clouds
-        if (Math.random() > 0.98) {
-            this.clouds.push({
-                x: 850,
-                y: Math.random() * 200,
-                s: 0.5 + Math.random(),
-                w: 60 + Math.random() * 40
-            });
-        }
-        this.clouds.forEach(c => c.x -= speed * 0.3);
-        this.clouds = this.clouds.filter(c => c.x > -150);
-
-        // Move obstacles with terrain
         this.obstacles.forEach(o => o.x -= speed);
+        this.beams.forEach(b => b.x -= speed);
         this.obstacles = this.obstacles.filter(o => o.x > -100);
+        this.beams = this.beams.filter(b => b.x > -100);
 
         if (this.scroll >= this.segmentWidth) {
             this.scroll -= this.segmentWidth;
             this.points.shift();
             this.generatePoint();
             
-            // Try spawn obstacle at the new point (far right)
-            this.spawnTimer++;
-            if (this.spawnTimer > 3 && Math.random() > 0.6) {
-                const type = Math.random() > 0.5 ? 'tree' : 'rock';
+            if (Math.random() > 0.4) {
                 this.obstacles.push({
                     x: 850,
                     y: this.points[this.points.length - 1],
-                    type: type,
-                    w: type === 'tree' ? 30 : 40,
-                    h: type === 'tree' ? 50 : 30
+                    w: 30, h: 60,
+                    color: Assets.COLORS.secondary
                 });
-                this.spawnTimer = 0;
+            }
+            if (Math.random() > 0.7) {
+                this.beams.push({
+                    x: 880, y: Math.random() * 300 + 50,
+                    w: 10, h: 40, color: Assets.COLORS.accent
+                });
             }
         }
     }
 
     getY(x) {
         const index = Math.floor((x + this.scroll) / this.segmentWidth);
-        const nextIndex = index + 1;
         const subX = (x + this.scroll) % this.segmentWidth;
-        
         const p1 = this.points[index] || this.lastY;
-        const p2 = this.points[nextIndex] || this.lastY;
-        
+        const p2 = this.points[index + 1] || p1;
         return p1 + (p2 - p1) * (subX / this.segmentWidth);
     }
 
     draw(ctx) {
-        // Clouds
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.clouds.forEach(c => {
-            ctx.beginPath();
-            ctx.ellipse(c.x, c.y, c.w/2, 20, 0, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        // Draw snow ground
-        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = Assets.COLORS.primary;
+        ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(0, 600);
+        ctx.moveTo(-20, this.points[0] - this.scroll);
         for(let i = 0; i < this.points.length; i++) {
             ctx.lineTo(i * this.segmentWidth - this.scroll, this.points[i]);
         }
-        ctx.lineTo(1000, 600);
-        ctx.lineTo(0, 600);
-        ctx.closePath();
-        ctx.fill();
-
-        // Terrain outline
-        ctx.strokeStyle = '#d0efff';
-        ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Draw obstacles
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+        ctx.lineTo(800, 600); ctx.lineTo(0, 600); ctx.closePath(); ctx.fill();
+
         this.obstacles.forEach(o => {
-            if (o.type === 'tree') {
-                ctx.fillStyle = '#2d5a27';
-                ctx.beginPath();
-                ctx.moveTo(o.x, o.y);
-                ctx.lineTo(o.x - 15, o.y + 10);
-                ctx.lineTo(o.x + 15, o.y + 10);
-                ctx.fill();
-                ctx.beginPath();
-                ctx.moveTo(o.x, o.y - 15);
-                ctx.lineTo(o.x - 20, o.y + 5);
-                ctx.lineTo(o.x + 20, o.y + 5);
-                ctx.fill();
-                ctx.fillStyle = '#4a2d1d';
-                ctx.fillRect(o.x - 4, o.y + 10, 8, 10);
-            } else {
-                ctx.fillStyle = '#888';
-                ctx.beginPath();
-                ctx.arc(o.x, o.y, 15, 0, Math.PI, true);
-                ctx.fill();
-            }
+            ctx.fillStyle = o.color;
+            ctx.fillRect(o.x - o.w/2, o.y - o.h, o.w, o.h);
+            ctx.shadowBlur = 10; ctx.shadowColor = o.color;
+            ctx.strokeStyle = '#fff'; ctx.strokeRect(o.x - o.w/2, o.y - o.h, o.w, o.h);
+            ctx.shadowBlur = 0;
+        });
+
+        this.beams.forEach(b => {
+            ctx.fillStyle = b.color;
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            ctx.shadowBlur = 15; ctx.shadowColor = b.color;
+            ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+            ctx.shadowBlur = 0;
         });
     }
 }
 
-class Player extends Entity {
-    constructor() {
-        super(150, 200, 24, 32, '#ff4400');
-        this.vy = 0;
-        this.grounded = false;
-        this.rotation = 0;
-        this.jumpForce = -12;
-        this.gravity = 0.6;
-        this.maxFall = 15;
-    }
+let terrain, player, speed, distance;
 
-    update(dt, terrain) {
-        const factor = dt / 16.67;
-        
-        // Gravity
-        this.vy += this.gravity * factor;
-        if (this.vy > this.maxFall) this.vy = this.maxFall;
-        
-        this.y += this.vy * factor;
-
-        const groundY = terrain.getY(this.x + this.width / 2);
-        
-        if (this.y + this.height > groundY) {
-            // Check if we hit ground hard at bad angle
-            if (this.vy > 12 && Math.abs(this.rotation) > 1) {
-                this.dead = true;
-            }
-
-            this.y = groundY - this.height;
-            this.vy = 0;
-            this.grounded = true;
-            
-            // Calculate slope angle
-            const nextY = terrain.getY(this.x + this.width / 2 + 10);
-            const targetRotation = Math.atan2(nextY - groundY, 10);
-            this.rotation += (targetRotation - this.rotation) * 0.3 * factor;
-            
-            // Particle effect
-            if (Math.random() > 0.7) {
-                engine.spawnParticle(this.x, this.y + this.height, '#fff', 1, 1);
-            }
-        } else {
-            this.grounded = false;
-            // Air rotation (flips!)
-            if (engine.keys['ArrowLeft'] || engine.keys['KeyA']) this.rotation -= 0.15 * factor;
-            if (engine.keys['ArrowRight'] || engine.keys['KeyD']) this.rotation += 0.15 * factor;
-        }
-
-        // Jump
-        if (this.grounded && (engine.justPressed('Space') || engine.justPressed('ArrowUp') || engine.justPressed('KeyW'))) {
-            this.vy = this.jumpForce;
-            this.grounded = false;
-            engine.spawnParticle(this.x, this.y + this.height, '#fff', 8, 2);
-        }
-        
-        // Collision with obstacles
-        terrain.obstacles.forEach(o => {
-            const dx = (this.x + this.width/2) - o.x;
-            const dy = (this.y + this.height/2) - o.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < 25) {
-                this.dead = true;
-            }
-        });
-    }
-
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
-        ctx.rotate(this.rotation);
-        
-        // Skis
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(-20, 16);
-        ctx.lineTo(20, 16);
-        ctx.stroke();
-        
-        // Body (Jacket)
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.roundRect(-12, -16, 24, 28, 5);
-        ctx.fill();
-        
-        // Helmet
-        ctx.fillStyle = '#ffff00';
-        ctx.beginPath();
-        ctx.arc(0, -14, 10, 0, Math.PI*2);
-        ctx.fill();
-        
-        // Goggles
-        ctx.fillStyle = '#000';
-        ctx.fillRect(2, -16, 8, 4);
-        
-        ctx.restore();
-    }
-}
-
-let player;
-let terrain;
-let gameSpeed = 5;
-let distance = 0;
-
-engine.start(() => {
-    player = new Player();
+function resetGame() {
     terrain = new Terrain();
-    gameSpeed = 5;
-    distance = 0;
-}, (dt) => {
+    player = { x: 100, y: 300, vy: 0, grounded: false, charRotation: 0 };
+    speed = 5; distance = 0;
+}
+
+engine.start(() => { resetGame(); }, (dt) => {
     const factor = dt / 16.67;
-    
-    // Increase speed over time
-    gameSpeed += 0.001 * factor;
-    distance += gameSpeed * factor;
+    speed += 0.001 * factor;
+    distance += speed * factor;
     engine.score = Math.floor(distance / 10);
-    
-    terrain.update(gameSpeed * factor, dt);
-    player.update(dt, terrain);
-    
-    if (player.dead) {
-        engine.addShake(15);
-        engine.spawnParticle(player.x, player.y, '#ff4400', 20, 5);
-        engine.state = 'GAMEOVER';
+
+    const groundY = terrain.getY(player.x);
+    if (player.y >= groundY - 10) {
+        player.y = groundY - 10;
+        player.vy = 0; player.grounded = true;
+        player.charRotation = 0;
+    } else {
+        player.vy += 0.6 * factor;
+        player.grounded = false;
+        player.charRotation += 0.1 * factor;
     }
+
+    if (player.grounded && (engine.justPressed('Space') || engine.isDown('ArrowUp') || engine.isDown('KeyW'))) {
+        player.vy = -12; player.grounded = false;
+        playSound('jump');
+        for(let i=0; i<5; i++) engine.spawnSpark(player.x, player.y, Assets.COLORS.primary);
+    }
+
+    player.y += player.vy * factor;
+    terrain.update(speed, dt);
+
+    terrain.obstacles.forEach(o => {
+        if (Math.abs(player.x - o.x) < 25 && player.y > o.y - o.h) {
+            engine.addShake(15); playSound('death');
+            engine.state = 'GAMEOVER';
+        }
+    });
+
+    terrain.beams.forEach(b => {
+        if (player.x > b.x && player.x < b.x + b.w && player.y > b.y && player.y < b.y + b.h) {
+            engine.addShake(15); playSound('death');
+            engine.state = 'GAMEOVER';
+        }
+    });
+    
+    if (player.y > 650) { engine.state = 'GAMEOVER'; playSound('death'); }
+
 }, (ctx) => {
-    // Sky gradient
-    const sky = ctx.createLinearGradient(0, 0, 0, 600);
-    sky.addColorStop(0, '#87ceeb');
-    sky.addColorStop(1, '#e0faff');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, 800, 600);
-    
-    terrain.draw(ctx);
-    player.draw(ctx);
-    
-    // Controls help
-    if (engine.score < 50) {
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.font = '10px "Press Start 2P"';
-        ctx.textAlign = 'center';
-        ctx.fillText('SPACE to Jump | ARROWS to Flip', 400, 100);
+    // Draw Background Parallax
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.05)';
+    for(let i=0; i<5; i++) {
+        const px = (-(distance * 0.2 + i * 200) % 1000) + 800;
+        ctx.fillRect(px, 100, 50, 400);
     }
+
+    terrain.draw(ctx);
+    
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.charRotation);
+    Assets.renderPlayer(ctx, 0, 0, 40, 40, { vx: speed, vy: player.vy });
+    ctx.restore();
+
+    engine.drawParticles();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText(`DIST: ${Math.floor(distance)}m`, 20, 40);
 });

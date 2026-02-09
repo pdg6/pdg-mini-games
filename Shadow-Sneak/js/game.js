@@ -2,7 +2,7 @@ const engine = new Engine('gameCanvas');
 engine.gameName = 'shadow-sneak';
 engine.loadHighScore();
 
-const player = new Entity(50, 50, 20, 20, '#fff');
+const player = new Entity(50, 50, 20, 20, Assets.COLORS.PRIMARY);
 let guards = [];
 let walls = [];
 let goal = { x: 700, y: 500, w: 40, h: 40};
@@ -50,6 +50,7 @@ function setupLevel(lvl) {
             sightLength: 120 + lvl * 10,
             alerted: false,
             alertTimer: 0,
+            waitTimer: 0,
             patrolAxis: Math.random() > 0.3 ? 'x' : 'y'
         };
         g.start = g.patrolAxis === 'x' ? g.x : g.y;
@@ -60,14 +61,12 @@ function setupLevel(lvl) {
 
 function lineIntersectsWall(x1, y1, x2, y2) {
     for (const w of walls) {
-        // Check if line from guard to player intersects any wall
         if (lineIntersectsRect(x1, y1, x2, y2, w.x, w.y, w.w, w.h)) return true;
     }
     return false;
 }
 
 function lineIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh) {
-    // Check line against 4 edges of rectangle
     return lineIntersectsLine(x1,y1,x2,y2, rx,ry, rx+rw,ry) ||
            lineIntersectsLine(x1,y1,x2,y2, rx+rw,ry, rx+rw,ry+rh) ||
            lineIntersectsLine(x1,y1,x2,y2, rx,ry+rh, rx+rw,ry+rh) ||
@@ -90,15 +89,9 @@ function playerInWall(px, py) {
 }
 
 function drawAgent(ctx, x, y) {
-    ctx.fillStyle = '#111';
-    ctx.shadowColor = '#00ff00';
-    ctx.shadowBlur = alertLevel > 0 ? 0 : 6;
-    ctx.beginPath(); ctx.arc(x+10, y+10, 10, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0;
-    // Night Vision Goggles
-    ctx.fillStyle = '#00ff00';
-    ctx.fillRect(x+5, y+5, 4, 4);
-    ctx.fillRect(x+11, y+5, 4, 4);
+    Assets.renderPlayer(ctx, x, y, 20, 20, {
+        state: alertLevel > 0 ? 'moving' : 'idle'
+    });
 }
 
 function drawGuard(ctx, x, y, dx, alerted) {
@@ -109,7 +102,6 @@ function drawGuard(ctx, x, y, dx, alerted) {
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(x, y+5); ctx.lineTo(x + (dx>0?15:-15), y+5); ctx.stroke();
-    // Alert exclamation
     if (alerted) {
         ctx.fillStyle = '#ff0000';
         ctx.font = 'bold 14px monospace';
@@ -118,13 +110,19 @@ function drawGuard(ctx, x, y, dx, alerted) {
     }
 }
 
+function normalizeAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+}
+
 engine.start(() => {
     level = 1; setupLevel(level);
 }, (dt) => {
     const factor = dt / 16.67;
     let speed = 3 * factor;
-    // Sneak (slower but smaller detection)
-    if (engine.keys['ShiftLeft'] || engine.keys['ShiftRight']) speed = 1.5 * factor;
+    const isSneaking = engine.keys['ShiftLeft'] || engine.keys['ShiftRight'];
+    if (isSneaking) speed = 1.5 * factor;
     
     let newX = player.x, newY = player.y;
     if (engine.keys['ArrowUp'] || engine.keys['KeyW']) newY -= speed;
@@ -132,134 +130,109 @@ engine.start(() => {
     if (engine.keys['ArrowLeft'] || engine.keys['KeyA']) newX -= speed;
     if (engine.keys['ArrowRight'] || engine.keys['KeyD']) newX += speed;
     
-    // Wall collision
     if (!playerInWall(newX, player.y)) player.x = newX;
     if (!playerInWall(player.x, newY)) player.y = newY;
     
     player.x = Math.max(0, Math.min(780, player.x));
     player.y = Math.max(0, Math.min(580, player.y));
     
-    // Goal check
     if (player.x < goal.x + goal.w && player.x + 20 > goal.x && 
         player.y < goal.y + goal.h && player.y + 20 > goal.y) {
             level++;
-            engine.score += 500 + Math.floor((1 - alertLevel) * 200);
-            engine.spawnParticle(player.x, player.y, '#00ff00', 20);
+            engine.score += 500;
+            playSound('levelup');
+            engine.spawnSpark(player.x, player.y, '#00ff00');
             setupLevel(level);
     }
     
-    // Alert decay
     alertLevel = Math.max(0, alertLevel - 0.005 * factor);
     
     guards.forEach(g => {
-        // Patrol movement
-        if (g.patrolAxis === 'x') {
-            g.x += g.vx * factor;
-            g.angle = g.vx > 0 ? 0 : Math.PI;
-            if (Math.abs(g.x - g.start) > g.limit) g.vx *= -1;
-        } else {
-            g.y += g.vy * factor;
-            g.angle = g.vy > 0 ? Math.PI/2 : -Math.PI/2;
-            if (Math.abs(g.y - g.start) > g.limit) g.vy *= -1;
-        }
+        g.angle = g.patrolAxis === 'x' ? (g.vx > 0 ? 0 : Math.PI) : (g.vy > 0 ? Math.PI/2 : -Math.PI/2);
         
-        let dx = (player.x + 10) - g.x;
-        let dy = (player.y + 10) - g.y;
-        let dist = Math.hypot(dx, dy);
-        let angleToPlayer = Math.atan2(dy, dx);
-        let diff = angleToPlayer - g.angle;
-        while (diff > Math.PI) diff -= Math.PI*2;
-        while (diff < -Math.PI) diff += Math.PI*2;
+        const dx = (player.x + 10) - g.x;
+        const dy = (player.y + 10) - g.y;
+        const dist = Math.hypot(dx, dy);
         
-        const isSneaking = engine.keys['ShiftLeft'] || engine.keys['ShiftRight'];
-        const effectiveSight = isSneaking ? g.sightLength * 0.6 : g.sightLength;
-        
-        // Line of sight blocked by walls?
-        const blocked = lineIntersectsWall(g.x, g.y, player.x + 10, player.y + 10);
-        
-        if (dist < effectiveSight && Math.abs(diff) < 0.5 && !blocked) {
-            alertLevel = Math.min(1, alertLevel + 0.03 * factor);
-            g.alerted = true;
-            g.alertTimer = 500;
-            if (alertLevel >= 1) {
-                engine.addShake(10);
-                engine.state = 'GAMEOVER';
+        if (dist < g.sightLength) {
+            const angleToPlayer = Math.atan2(dy, dx);
+            const angleDiff = normalizeAngle(angleToPlayer - g.angle);
+            if (Math.abs(angleDiff) < Math.PI/4) {
+                if (!lineIntersectsWall(g.x, g.y, player.x + 10, player.y + 10)) {
+                    g.alerted = true;
+                    g.alertTimer = 1000;
+                    const alertGain = (1.2 - dist/g.sightLength) * (isSneaking ? 0.05 : 0.2);
+                    alertLevel = Math.min(1.0, alertLevel + alertGain * factor);
+                    if (alertLevel >= 1.0) {
+                        engine.addShake(20);
+                        playSound('death');
+                        engine.state = 'GAMEOVER';
+                    }
+                }
             }
+        }
+
+        if (g.alertTimer > 0) {
+            g.alertTimer -= dt;
+            if (g.alertTimer <= 0) g.alerted = false;
+        }
+
+        if (g.waitTimer > 0) {
+            g.waitTimer -= dt;
         } else {
-            if (g.alertTimer > 0) g.alertTimer -= dt;
-            else g.alerted = false;
+            if (g.patrolAxis === 'x') {
+                g.x += g.vx * factor;
+                if (Math.abs(g.x - g.start) > g.limit) {
+                    g.vx *= -1; g.waitTimer = 1000;
+                }
+            } else {
+                g.y += g.vy * factor;
+                if (Math.abs(g.y - g.start) > g.limit) {
+                    g.vy *= -1; g.waitTimer = 1000;
+                }
+            }
         }
     });
 }, (ctx) => {
-    // Floor Tiles
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, 800, 600);
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 1;
-    for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
-    for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
+    ctx.strokeStyle = '#050a15';
+    for(let i=0; i<800; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke();
+    }
+    for(let i=0; i<600; i+=40) {
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke();
+    }
 
-    // Walls
     walls.forEach(w => {
-        ctx.fillStyle = '#2a2a3a';
+        ctx.fillStyle = '#111';
         ctx.fillRect(w.x, w.y, w.w, w.h);
-        ctx.fillStyle = '#3a3a4a';
-        ctx.fillRect(w.x, w.y, w.w, 3);
-        ctx.strokeStyle = '#444';
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 1;
         ctx.strokeRect(w.x, w.y, w.w, w.h);
     });
 
-    // Goal
-    ctx.fillStyle = 'rgba(0, 255, 0, 0.15)';
-    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
-    ctx.strokeStyle = '#00ff00';
-    ctx.setLineDash([4, 4]);
-    ctx.lineDashOffset = -engine.lastTime / 10;
-    ctx.strokeRect(goal.x, goal.y, goal.w, goal.h);
-    ctx.setLineDash([]);
-    ctx.font = '10px monospace';
-    ctx.fillStyle = '#00ff00';
-    ctx.textAlign = 'center';
-    ctx.fillText("EXIT", goal.x + goal.w/2, goal.y - 5);
+    ctx.shadowBlur = 10; ctx.shadowColor = '#ffff00';
+    ctx.fillStyle = '#ffff0033'; ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2; ctx.strokeRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.shadowBlur = 0;
 
-    drawAgent(ctx, player.x, player.y);
     guards.forEach(g => {
-        // Cone
-        let coneColor = g.alerted ? 'rgba(255, 80, 0,' : 'rgba(255, 255, 0,';
-        let grad = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.sightLength);
-        grad.addColorStop(0, coneColor + '0.4)');
-        grad.addColorStop(1, coneColor + '0)');
-        ctx.fillStyle = grad;
+        ctx.fillStyle = g.alerted ? 'rgba(255, 0, 0, 0.2)' : 'rgba(0, 150, 255, 0.1)';
         ctx.beginPath();
         ctx.moveTo(g.x, g.y);
-        ctx.arc(g.x, g.y, g.sightLength, g.angle - 0.5, g.angle + 0.5);
+        ctx.arc(g.x, g.y, g.sightLength, g.angle - Math.PI/4, g.angle + Math.PI/4);
+        ctx.closePath();
         ctx.fill();
         drawGuard(ctx, g.x, g.y, g.vx || g.vy, g.alerted);
     });
-    
-    // Alert bar
-    if (alertLevel > 0) {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(300, 10, 200, 12);
-        ctx.fillStyle = alertLevel > 0.7 ? '#ff0000' : alertLevel > 0.4 ? '#ffaa00' : '#ffff00';
-        ctx.fillRect(300, 10, 200 * alertLevel, 12);
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(300, 10, 200, 12);
-        ctx.font = '8px "Press Start 2P"';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
-        ctx.fillText('ALERT', 400, 20);
-    }
-    
-    // Level indicator
-    ctx.font = '8px "Press Start 2P"';
-    ctx.fillStyle = '#555';
-    ctx.textAlign = 'left';
-    ctx.fillText('FLOOR ' + level, 10, 590);
-    
-    // Sneak indicator
-    if (engine.keys['ShiftLeft'] || engine.keys['ShiftRight']) {
-        ctx.fillStyle = '#00ff00';
-        ctx.fillText('SNEAKING', 10, 20);
-    }
+
+    drawAgent(ctx, player.x, player.y);
+
+    ctx.fillStyle = '#333'; ctx.fillRect(300, 20, 200, 10);
+    ctx.fillStyle = alertLevel > 0.7 ? '#ff0000' : '#ffff00';
+    ctx.fillRect(300, 20, 200 * alertLevel, 10);
+    ctx.strokeStyle = '#fff'; ctx.strokeRect(300, 20, 200, 10);
+
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px monospace';
+    ctx.fillText('ALERT LEVEL', 360, 45);
+    ctx.fillText('LEVEL ' + level, 20, 30);
 });

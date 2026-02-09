@@ -1,174 +1,319 @@
-// Main Game Controller
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const overlay = document.getElementById('overlay');
-const levelBanner = document.getElementById('level-banner');
-const scoreDisplay = document.getElementById('score');
-const levelDisplay = document.getElementById('level-display');
-const heartsDisplay = document.querySelector('.heart');
+// Inferno Run - Modernized with Shared Engine
+const engine = new Engine('gameCanvas');
+engine.gameName = 'Inferno-Run';
 
-// Game State
-let gameState = 'start';
+// State & Level variables
 let currentLevel = 1;
-let score = 0;
+let coinsCollected = 0;
 let lives = 3;
-let screenShake = 0;
-let lastTime = 0;
-let deltaTime = 0;
 
-// Initialize game
-function init() {
-    initStars(canvas.width, canvas.height);
-    loadLevel(currentLevel);
-    initInput();
-}
+// Assets/Entities
+let platforms = [];
+let movingPlatforms = [];
+let fires = [];
+let coins = [];
+let goal = { x: 0, y: 0, width: 0, height: 0 };
 
-function loadLevel(levelNum) {
-    const playerStart = loadLevelEntities(levelNum);
-    resetPlayer(playerStart);
-    clearParticles();
-}
-
-// Input callback
-function onKeyDown(code) {
-    if (gameState === 'start' && code === 'Space') {
-        initAudio();
-        gameState = 'playing';
-        overlay.classList.add('hidden');
-        showLevelBanner();
-    }
-    
-    if (gameState === 'dead' && code === 'KeyR') {
-        if (lives > 0) {
-            loadLevel(currentLevel);
-            gameState = 'playing';
-            overlay.classList.add('hidden');
-        } else {
-            lives = 3; score = 0; currentLevel = 1;
-            updateUI(); loadLevel(1);
-            gameState = 'playing';
-            overlay.classList.add('hidden');
-            showLevelBanner();
-        }
-    }
-    
-    if (gameState === 'win' && code === 'Space') {
-        currentLevel++;
-        if (currentLevel > levels.length) {
-            currentLevel = 1; score = 0; lives = 3;
-        }
-        loadLevel(currentLevel);
-        updateUI();
-        gameState = 'playing';
-        overlay.classList.add('hidden');
-        showLevelBanner();
-    }
-}
-
-// Collision callbacks
-const collisionCallbacks = {
-    onDeath: killPlayer,
-    onCoinCollect: () => {
-        score += 100;
-        updateUI();
-    },
-    onWin: winLevel
+// Player specific (shared engine handles part of this, but we need local physics)
+const player = {
+    x: 0, y: 0, width: 28, height: 32,
+    vx: 0, vy: 0,
+    grounded: false,
+    jumping: false,
+    facing: 1,
+    trail: [],
+    isDashing: false,
+    dashTime: 0,
+    lastDashTime: 0,
+    touchingWall: 0,
+    dashDirection: 1
 };
 
-function killPlayer() {
-    if (gameState !== 'playing') return;
-    lives--;
-    screenShake = 15;
-    playSound('death');
-    spawnParticle(player.x + player.width / 2, player.y + player.height / 2, 'death');
-    gameState = 'dead';
-    updateUI();
+// Physics Constants
+const GRAVITY = 0.6;
+const JUMP_FORCE = -13;
+const MAX_SPEED = 6;
+const ACCEL = 0.5;
+const FRICTION = 0.85;
+const DASH_SPEED = 15;
+const DASH_DURATION = 150;
+const DASH_COOLDOWN = 500;
+
+function setup() {
+    loadLevel(currentLevel);
+    engine.score = coinsCollected;
+}
+
+function loadLevel(num) {
+    const level = levels[(num - 1) % levels.length];
+    platforms = JSON.parse(JSON.stringify(level.platforms));
+    movingPlatforms = JSON.parse(JSON.stringify(level.movingPlatforms));
+    fires = JSON.parse(JSON.stringify(level.fires));
+    coins = level.coins.map(c => ({ ...c, collected: false, bob: Math.random() * Math.PI * 2 }));
+    goal = { ...level.goal };
     
-    setTimeout(() => {
-        if (lives > 0) {
-            overlay.innerHTML = '<h2 style="color: #ff4400;">YOU DIED</h2>' +
-                '<p>Lives remaining: <span class="heart">' + '\u2665'.repeat(lives) + '</span></p>' +
-                '<p class="blink" style="margin-top: 30px; color: #fff;">PRESS R TO RETRY</p>';
+    player.x = level.playerStart.x;
+    player.y = level.playerStart.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.trail = [];
+    player.isDashing = false;
+}
+
+function update(dt) {
+    if (engine.state !== 'PLAY') return;
+
+    const now = performance.now();
+
+    // Dash logic
+    const canDash = (now - player.lastDashTime) > DASH_COOLDOWN;
+    if (engine.justPressed('ShiftLeft') && canDash && !player.isDashing) {
+        player.isDashing = true;
+        player.dashTime = now;
+        player.lastDashTime = now;
+        player.dashDirection = player.facing;
+        player.vy = 0;
+        playSound('dash');
+        for(let i=0; i<8; i++) engine.spawnSpark(player.x+14, player.y+16, Assets.COLORS.accent);
+    }
+
+    if (player.isDashing) {
+        if (now - player.dashTime < DASH_DURATION) {
+            player.vx = DASH_SPEED * player.dashDirection;
+            player.vy = 0;
+            player.trail.push({ x: player.x + 14, y: player.y + 16, life: 1 });
         } else {
-            overlay.innerHTML = '<h1 style="color: #ff4400;">GAME OVER</h1>' +
-                '<h2>FINAL SCORE: ' + score + '</h2>' +
-                '<p class="blink" style="margin-top: 30px; color: #fff;">PRESS R TO RESTART</p>';
+            player.isDashing = false;
         }
-        overlay.classList.remove('hidden');
-    }, 500);
+    } else {
+        // Horizontal Movement
+        let inputX = 0;
+        if (engine.isDown('ArrowLeft') || engine.isDown('KeyA')) inputX--;
+        if (engine.isDown('ArrowRight') || engine.isDown('KeyD')) inputX++;
+
+        if (inputX !== 0) {
+            player.vx += inputX * ACCEL;
+            player.facing = inputX;
+        } else {
+            player.vx *= FRICTION;
+        }
+        player.vx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, player.vx));
+
+        // Jump
+        if (player.grounded && (engine.justPressed('Space') || engine.isDown('ArrowUp') || engine.isDown('KeyW'))) {
+            player.vy = JUMP_FORCE;
+            player.grounded = false;
+            playSound('jump');
+            for(let i=0; i<5; i++) engine.spawnSpark(player.x+14, player.y+32, Assets.COLORS.secondary);
+        }
+
+        // Gravity
+        player.vy += GRAVITY;
+    }
+
+    // Move & Collide
+    player.x += player.vx;
+    checkXCollisions();
+    player.y += player.vy;
+    checkYCollisions();
+
+    // Entity updates
+    movingPlatforms.forEach(p => {
+        p.x += p.speed * p.direction;
+        if (p.x >= p.endX) p.direction = -1;
+        else if (p.x <= p.startX) p.direction = 1;
+    });
+
+    // Fire & Coin Collisions
+    checkTriggers();
+
+    // Goal
+    if (rectIntersect(player.x, player.y, player.width, player.height, goal.x, goal.y, goal.width, goal.height)) {
+        winLevel();
+    }
+
+    // Bounds
+    if (player.y > engine.height) killPlayer();
+
+    // Trail cleanup
+    player.trail.forEach(t => t.life -= 0.05);
+    player.trail = player.trail.filter(t => t.life > 0);
+}
+
+function draw() {
+    const ctx = engine.ctx;
+    
+    // Background
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, engine.width, engine.height);
+
+    // Goal Gate (Neon)
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = Assets.COLORS.accent;
+    ctx.strokeStyle = Assets.COLORS.accent;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(goal.x, goal.y, goal.width, goal.height);
+    ctx.shadowBlur = 0;
+
+    // Draw Entities
+    drawLevelEntities(ctx);
+
+    // Dash Trail
+    player.trail.forEach(t => {
+        ctx.fillStyle = `rgba(0, 255, 255, ${t.life * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 10 * t.life, 0, Math.PI*2);
+        ctx.fill();
+    });
+
+    // Player
+    Assets.renderPlayer(ctx, player.x, player.y, player.width, player.height, player.vx, player.vy);
+
+    // Particles
+    engine.drawParticles();
+
+    // UI
+    drawUI(ctx);
+}
+
+function drawUI(ctx) {
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px Courier New';
+    ctx.fillText(`LEVEL: ${currentLevel}`, 20, 30);
+    ctx.fillText(`SCORE: ${engine.score}`, 20, 55);
+    
+    ctx.fillStyle = Assets.COLORS.secondary;
+    let hearts = '';
+    for(let i=0; i<lives; i++) hearts += '♥';
+    ctx.fillText(hearts, 20, 80);
+
+    if (engine.state === 'MENU') {
+        engine.drawOverlay('INFERNO RUN', 'NAVIGATE THE FLAMES', 'PRESS SPACE TO START');
+    } else if (engine.state === 'GAMEOVER') {
+        engine.drawOverlay('GAME OVER', `FINAL SCORE: ${engine.score}`, 'PRESS SPACE TO RESTART');
+    }
+}
+
+function checkXCollisions() {
+    [...platforms, ...movingPlatforms].forEach(p => {
+        if (rectIntersect(player.x, player.y, player.width, player.height, p.x, p.y, p.width, p.height)) {
+            if (player.vx > 0) player.x = p.x - player.width;
+            else if (player.vx < 0) player.x = p.x + p.width;
+            player.vx = 0;
+        }
+    });
+}
+
+function checkYCollisions() {
+    player.grounded = false;
+    [...platforms, ...movingPlatforms].forEach(p => {
+        if (rectIntersect(player.x, player.y, player.width, player.height, p.x, p.y, p.width, p.height)) {
+            if (player.vy > 0) {
+                player.y = p.y - player.height;
+                player.grounded = true;
+                player.vy = 0;
+                // If on moving platform, move with it
+                if (p.speed) player.x += p.speed * p.direction;
+            } else if (player.vy < 0) {
+                player.y = p.y + p.height;
+                player.vy = 0;
+            }
+        }
+    });
+}
+
+function checkTriggers() {
+    fires.forEach(f => {
+        if (rectIntersect(player.x+4, player.y+4, player.width-8, player.height-8, f.x, f.y, f.width, f.height)) {
+            if (!player.isDashing) killPlayer();
+        }
+    });
+
+    coins.forEach(c => {
+        if (!c.collected && rectIntersect(player.x, player.y, player.width, player.height, c.x, c.y, 20, 20)) {
+            c.collected = true;
+            engine.score += 100;
+            playSound('coin');
+            for(let i=0; i<10; i++) engine.spawnSpark(c.x+10, c.y+10, Assets.COLORS.secondary);
+        }
+    });
+}
+
+function killPlayer() {
+    lives--;
+    engine.shake = 15;
+    playSound('death');
+    for(let i=0; i<20; i++) engine.spawnSpark(player.x+14, player.y+16, Assets.COLORS.primary);
+    
+    if (lives <= 0) {
+        engine.state = 'GAMEOVER';
+        lives = 3;
+        currentLevel = 1;
+        coinsCollected = 0;
+    } else {
+        loadLevel(currentLevel);
+    }
 }
 
 function winLevel() {
-    gameState = 'win';
-    score += 500;
     playSound('levelup');
-    updateUI();
-    
-    if (currentLevel >= levels.length) {
-        overlay.innerHTML = '<h1>VICTORY!</h1>' +
-            '<h2>FINAL SCORE: ' + score + '</h2>' +
-            '<p>You conquered all ' + levels.length + ' levels!</p>' +
-            '<p class="blink" style="margin-top: 40px; color: #fff;">PRESS SPACE TO PLAY AGAIN</p>';
+    coinsCollected = engine.score;
+    currentLevel++;
+    if (currentLevel > levels.length) {
+        engine.state = 'GAMEOVER'; // Full win
     } else {
-        overlay.innerHTML = '<h2 style="color: #00ffcc;">LEVEL COMPLETE!</h2>' +
-            '<p>Score: ' + score + '</p>' +
-            '<p class="blink" style="margin-top: 30px; color: #fff;">PRESS SPACE FOR NEXT LEVEL</p>';
+        loadLevel(currentLevel);
     }
-    overlay.classList.remove('hidden');
 }
 
-function showLevelBanner() {
-    levelBanner.textContent = 'LEVEL ' + currentLevel;
-    levelBanner.style.opacity = 1;
-    setTimeout(() => levelBanner.style.opacity = 0, 1500);
+function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
 }
 
-function updateUI() {
-    scoreDisplay.textContent = score;
-    levelDisplay.textContent = 'LEVEL ' + currentLevel;
-    heartsDisplay.innerHTML = '\u2665'.repeat(lives) + '\u2661'.repeat(3 - lives);
+function drawLevelEntities(ctx) {
+    // Platforms (Modernized look)
+    [...platforms, ...movingPlatforms].forEach(p => {
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+        ctx.strokeStyle = '#444466';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(p.x, p.y, p.width, p.height);
+        
+        // Neon edge
+        ctx.fillStyle = Assets.COLORS.primary;
+        ctx.fillRect(p.x, p.y, p.width, 2);
+    });
+
+    // Fires
+    fires.forEach(f => {
+        const t = performance.now() * 0.01;
+        ctx.fillStyle = Assets.COLORS.primary;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = Assets.COLORS.primary;
+        for(let i=0; i<3; i++) {
+            const h = f.height + Math.sin(t + i) * 10;
+            ctx.beginPath();
+            ctx.moveTo(f.x, f.y + f.height);
+            ctx.lineTo(f.x + f.width/2, f.y + f.height - h);
+            ctx.lineTo(f.x + f.width, f.y + f.height);
+            ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+    });
+
+    // Coins
+    coins.forEach(c => {
+        if (c.collected) return;
+        const bob = Math.sin(performance.now() * 0.005 + c.bob) * 5;
+        ctx.fillStyle = Assets.COLORS.secondary;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = Assets.COLORS.secondary;
+        ctx.beginPath();
+        ctx.arc(c.x + 10, c.y + 10 + bob, 8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    });
 }
 
-// Main game loop
-function gameLoop(timestamp) {
-    deltaTime = timestamp - lastTime;
-    lastTime = timestamp;
-    
-    // Screen shake effect
-    if (screenShake > 0) {
-        ctx.save();
-        ctx.translate(
-            (Math.random() - 0.5) * screenShake,
-            (Math.random() - 0.5) * screenShake
-        );
-        screenShake *= 0.9;
-        if (screenShake < 0.5) screenShake = 0;
-    }
-    
-    // Update
-    updateStars();
-    updateMovingPlatforms();
-    updatePlayer(gameState, keys);
-    checkCollisions(gameState, canvas, collisionCallbacks);
-    updateFireParticles(fires);
-    updateParticles();
-    
-    // Render
-    drawBackground(ctx, canvas.width, canvas.height);
-    drawPlatforms(ctx);
-    drawFires(ctx);
-    drawFireParticles(ctx);
-    drawCoins(ctx);
-    drawGoal(ctx);
-    drawPlayer(ctx);
-    drawParticles(ctx);
-    
-    if (screenShake > 0) ctx.restore();
-    
-    requestAnimationFrame(gameLoop);
-}
-
-// Start the game
-init();
-updateUI();
-requestAnimationFrame(gameLoop);
+// Kickoff
+engine.start(setup, update, draw);

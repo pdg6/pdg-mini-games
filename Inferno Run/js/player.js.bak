@@ -196,35 +196,22 @@ function updatePlayer(gameState, keys) {
 function drawPlayer(ctx) {
     // Draw trail
     player.trail.forEach(t => {
-        const color = t.dash ? 'rgba(255, 100, 50, ' : 'rgba(0, 255, 204, ';
-        ctx.fillStyle = color + (t.life * 0.4) + ')';
+        const color = t.dash ? Assets.COLORS.DANGER : Assets.COLORS.PRIMARY;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = t.life * 0.4;
         ctx.beginPath();
         ctx.arc(t.x, t.y, (t.dash ? 8 : 5) * t.life, 0, Math.PI * 2);
         ctx.fill();
     });
-    
-    // Draw player body with glow
-    ctx.shadowColor = player.isDashing ? '#ff6600' : (player.isWallSliding ? '#ffcc00' : '#00ffcc');
-    ctx.shadowBlur = player.isDashing ? 20 : 10;
-    
-    ctx.fillStyle = player.isDashing ? '#ff6600' : '#00ffcc';
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-    
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = player.isDashing ? '#cc4400' : '#008888';
-    ctx.fillRect(player.x + 4, player.y + 4, player.width - 8, player.height - 8);
-    
-    // Draw eyes
-    const eyeX = player.facing === 1 ? player.x + 16 : player.x + 6;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(eyeX, player.y + 10, 6, 6);
-    ctx.fillRect(eyeX - (player.facing === 1 ? 10 : -10), player.y + 10, 6, 6);
-    
-    // Draw pupils
-    const pupilOffset = player.facing * 2;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(eyeX + 2 + pupilOffset, player.y + 12, 2, 2);
-    ctx.fillRect(eyeX - (player.facing === 1 ? 10 : -10) + 2 + pupilOffset, player.y + 12, 2, 2);
+    ctx.globalAlpha = 1;
+
+    // Use centralized render service
+    Assets.renderPlayer(ctx, player.x, player.y, player.width, player.height, {
+        state: player.isDashing ? 'moving' : 'idle',
+        velocity: { x: player.dx, y: player.dy },
+        grounded: player.grounded,
+        opacity: 1
+    });
     
     // Wall slide indicator
     if (player.isWallSliding) {

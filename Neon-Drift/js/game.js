@@ -2,194 +2,187 @@ const engine = new Engine('gameCanvas');
 engine.gameName = 'neon-drift';
 engine.loadHighScore();
 
+// Procedural Track Generation
+let trackPoints = [];
+const TRACK_RADIUS = 200;
+const TRACK_WIDTH = 100;
+const TRACK_COMPLEXITY = 12;
+
+function generateTrack() {
+    trackPoints = [];
+    for (let i = 0; i < TRACK_COMPLEXITY; i++) {
+        const angle = (i / TRACK_COMPLEXITY) * Math.PI * 2;
+        const variance = 50 + Math.random() * 100;
+        const r = TRACK_RADIUS + (Math.random() - 0.5) * variance;
+        trackPoints.push({
+            x: 400 + Math.cos(angle) * r,
+            y: 300 + Math.sin(angle) * r,
+            angle: angle
+        });
+    }
+}
+
+function isPointOnTrack(px, py) {
+    let minSourceDist = Infinity;
+    for (let i = 0; i < trackPoints.length; i++) {
+        const p1 = trackPoints[i];
+        const p2 = trackPoints[(i + 1) % trackPoints.length];
+        
+        // Distance to segment
+        const d = distToSegment({x: px, y: py}, p1, p2);
+        minSourceDist = Math.min(minSourceDist, d);
+    }
+    return minSourceDist < TRACK_WIDTH / 2;
+}
+
+function distToSegment(p, v, w) {
+    const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+    if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+}
+
 let car = { x: 600, y: 300, angle: 0, speed: 0, wx: 0, wy: 0 };
 let totalTime = 0;
 let trail = [];
 let lap = 0;
 let lapTimes = [];
 let bestLap = Infinity;
-let lastCheckAngle = 0;
 let checkpointsPassed = 0;
-const CHECKPOINTS = 4;
 let onTrack = true;
 
-function getCarTrackAngle() {
-    return Math.atan2(car.y - 300, car.x - 400);
-}
-
-function normalizeAngle(a) {
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a < -Math.PI) a += Math.PI * 2;
-    return a;
-}
-
 engine.start(() => {
-    car = { x: 600, y: 300, angle: 0, speed: 0, wx: 0, wy: 0 };
+    generateTrack();
+    // Start at first point
+    car = { x: trackPoints[0].x, y: trackPoints[0].y, angle: trackPoints[0].angle + Math.PI/2, speed: 0, wx: 0, wy: 0 };
     totalTime = 0;
     trail = [];
     lap = 0;
     lapTimes = [];
     bestLap = parseFloat(localStorage.getItem('neonDrift_bestLap')) || Infinity;
-    lastCheckAngle = getCarTrackAngle();
     checkpointsPassed = 0;
 }, (dt) => {
     const factor = dt / 16.67;
     
-    if (engine.keys['ArrowUp'] || engine.keys['KeyW']) car.speed += 0.2 * factor;
-    if (engine.keys['ArrowDown'] || engine.keys['KeyS']) car.speed -= 0.1 * factor;
-    if (engine.keys['ArrowLeft'] || engine.keys['KeyA']) car.angle -= 0.07 * factor * (0.5 + Math.min(Math.abs(car.speed), 5) / 10);
-    if (engine.keys['ArrowRight'] || engine.keys['KeyD']) car.angle += 0.07 * factor * (0.5 + Math.min(Math.abs(car.speed), 5) / 10);
+    // Input
+    if (engine.keys['ArrowUp'] || engine.keys['KeyW']) {
+        car.speed += 0.25 * factor;
+        if (Math.random() > 0.8) engine.spawnSpark(car.x, car.y, Assets.COLORS.secondary);
+    }
+    if (engine.keys['ArrowDown'] || engine.keys['KeyS']) car.speed -= 0.15 * factor;
     
-    // Drag (exponential per-frame → use dt)
-    car.speed *= Math.pow(0.96, factor);
+    // Steering based on speed
+    const steeringSens = 0.08 * (0.4 + Math.min(Math.abs(car.speed), 8) / 10);
+    if (engine.keys['ArrowLeft'] || engine.keys['KeyA']) car.angle -= steeringSens * factor;
+    if (engine.keys['ArrowRight'] || engine.keys['KeyD']) car.angle += steeringSens * factor;
+    
+    // Drift physics (simplified)
+    car.speed *= Math.pow(0.97, factor);
     
     car.wx = Math.cos(car.angle) * car.speed;
     car.wy = Math.sin(car.angle) * car.speed;
     car.x += car.wx * factor;
     car.y += car.wy * factor;
     
-    let dist = Math.hypot(car.x - 400, car.y - 300);
-    onTrack = dist >= 150 && dist <= 250;
+    // Track Bounds
+    onTrack = isPointOnTrack(car.x, car.y);
     
     if (!onTrack) {
-        car.speed *= Math.pow(0.8, factor);
-        if (Math.abs(car.speed) > 1) {
-            engine.addShake(2);
-            if(Math.random() > 0.5) engine.spawnParticle(car.x, car.y, '#555', 1);
+        car.speed *= Math.pow(0.85, factor);
+        if (Math.abs(car.speed) > 1.5) {
+            engine.addShake(3);
+            if(Math.random() > 0.3) engine.spawnSpark(car.x, car.y, '#666');
+            if (car.speed > 1 && Math.random() > 0.9) playSound('death'); 
         }
     }
     
-    // Boost trail
-    if (Math.abs(car.speed) > 5) {
-        engine.spawnParticle(car.x - car.wx*2, car.y - car.wy*2, '#ffaa00', 1);
-    }
-    
-    // Skid marks trail
-    if (Math.abs(car.speed) > 2) {
-        trail.push({ x: car.x, y: car.y, life: 1.0 });
-        if (trail.length > 200) trail.shift();
-    }
-    trail.forEach(t => t.life -= 0.003);
-    trail = trail.filter(t => t.life > 0);
-    
-    // Lap detection via checkpoint system
-    const curAngle = getCarTrackAngle();
-    const angleDiff = normalizeAngle(curAngle - lastCheckAngle);
-    
-    // Clockwise lap (positive angle progression)
-    if (angleDiff > Math.PI / CHECKPOINTS * 0.8) {
+    // Lap Progress
+    const nextCP = trackPoints[(checkpointsPassed + 1) % trackPoints.length];
+    const distToCP = Math.hypot(car.x - nextCP.x, car.y - nextCP.y);
+    if (distToCP < TRACK_WIDTH) {
         checkpointsPassed++;
-        lastCheckAngle = curAngle;
-    } else if (angleDiff < -Math.PI / CHECKPOINTS * 0.8) {
-        checkpointsPassed = Math.max(0, checkpointsPassed - 1);
-        lastCheckAngle = curAngle;
+        if (checkpointsPassed % trackPoints.length === 0) {
+            lap++;
+            engine.score = lap;
+            playSound('levelup');
+            for(let i=0; i<15; i++) engine.spawnSpark(car.x, car.y, Assets.COLORS.accent);
+        }
     }
     
-    if (checkpointsPassed >= CHECKPOINTS * 2) {
-        // Completed a lap!
-        lap++;
-        const lapTime = totalTime - (lapTimes.reduce((a,b) => a+b, 0));
-        lapTimes.push(lapTime);
-        if (lapTime < bestLap) {
-            bestLap = lapTime;
-            localStorage.setItem('neonDrift_bestLap', bestLap);
-            engine.spawnParticle(car.x, car.y, '#ffcc00', 20);
-        }
-        engine.spawnParticle(car.x, car.y, '#00ffcc', 10);
-        engine.score = lap;
-        checkpointsPassed = 0;
-        lastCheckAngle = curAngle;
+    // Trail
+    if (Math.abs(car.speed) > 2) {
+        trail.push({ x: car.x, y: car.y, life: 1.0, angle: car.angle });
+        if (trail.length > 150) trail.shift();
     }
+    trail.forEach(t => t.life -= 0.005);
+    trail = trail.filter(t => t.life > 0);
     
     totalTime += dt;
 }, (ctx) => {
-    // Skid marks
+    // Background Grid
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 1;
+    for(let i=0; i<800; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke();
+    }
+    for(let i=0; i<600; i+=40) {
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke();
+    }
+
+    // Draw Track Path
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    
+    // Outer Glow
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = Assets.COLORS.primary;
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = TRACK_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(trackPoints[0].x, trackPoints[0].y);
+    trackPoints.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.closePath();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Inner Lines
+    ctx.strokeStyle = Assets.COLORS.primary;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Road markers
+    ctx.setLineDash([20, 20]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Skid Marks
     trail.forEach(t => {
-        ctx.fillStyle = `rgba(80, 80, 80, ${t.life * 0.3})`;
-        ctx.fillRect(t.x - 2, t.y - 2, 4, 4);
+        ctx.fillStyle = `rgba(0, 255, 200, ${t.life * 0.2})`;
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        ctx.rotate(t.angle);
+        ctx.fillRect(-2, -8, 4, 16);
+        ctx.restore();
     });
 
-    // Track - Neon Borders
-    ctx.lineWidth = 100;
-    ctx.beginPath(); ctx.arc(400, 300, 200, 0, Math.PI*2); 
-    ctx.strokeStyle = '#222'; ctx.stroke();
-    
-    // Bounds Glow
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = '#00ffcc';
-    ctx.strokeStyle = '#00ffcc';
-    ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(400, 300, 150, 0, Math.PI*2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(400, 300, 250, 0, Math.PI*2); ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Checkpoint markers
-    for (let i = 0; i < CHECKPOINTS * 2; i++) {
-        const a = (i / (CHECKPOINTS * 2)) * Math.PI * 2;
-        const x1 = 400 + Math.cos(a) * 150;
-        const y1 = 300 + Math.sin(a) * 150;
-        const x2 = 400 + Math.cos(a) * 250;
-        const y2 = 300 + Math.sin(a) * 250;
-        ctx.strokeStyle = i < checkpointsPassed ? '#00ff88' : '#333';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    }
-
-    // Start Line
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(650, 300); ctx.lineTo(550, 300); ctx.stroke();
-
-    // Car - Detailed
-    ctx.save();
-    ctx.translate(car.x, car.y);
-    ctx.rotate(car.angle);
-    
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(-15, -10, 35, 25);
-
-    // Body
-    ctx.fillStyle = onTrack ? '#ffcc00' : '#ff6600';
+    // Checkpoint target
+    const target = trackPoints[(checkpointsPassed + 1) % trackPoints.length];
+    ctx.fillStyle = Assets.COLORS.accent;
     ctx.beginPath();
-    ctx.moveTo(15, -10);
-    ctx.lineTo(15, 10);
-    ctx.lineTo(-15, 10);
-    ctx.lineTo(-15, -10);
+    ctx.arc(target.x, target.y, 10, 0, Math.PI*2);
     ctx.fill();
-    
-    // Roof
-    ctx.fillStyle = '#333';
-    ctx.fillRect(-5, -8, 10, 16);
-    
-    // Headlights
-    ctx.fillStyle = '#ffffaa';
-    ctx.shadowBlur = 5; ctx.shadowColor = '#ffffaa';
-    ctx.fillRect(14, -8, 2, 4);
-    ctx.fillRect(14, 4, 2, 4);
-    ctx.shadowBlur = 0;
 
-    // Taillights
-    ctx.fillStyle = '#ff0000';
-    ctx.fillRect(-15, -8, 2, 4);
-    ctx.fillRect(-15, 4, 2, 4);
+    // Car
+    Assets.renderPlayer(ctx, car.x - 15, car.y - 12, 30, 24, car.wx, car.wy);
 
-    ctx.restore();
+    // Particles
+    engine.drawParticles();
 
     // HUD
-    ctx.font = '10px "Press Start 2P"';
-    ctx.textAlign = 'left';
     ctx.fillStyle = '#fff';
-    ctx.fillText(`LAP: ${lap}`, 10, 25);
-    ctx.fillText(`TIME: ${(totalTime / 1000).toFixed(1)}s`, 10, 45);
-    ctx.fillStyle = '#ffcc00';
-    if (bestLap < Infinity) {
-        ctx.fillText(`BEST: ${(bestLap / 1000).toFixed(2)}s`, 10, 65);
-    }
-    // Speed bar
-    const spdPct = Math.min(Math.abs(car.speed) / 12, 1);
-    ctx.fillStyle = '#333';
-    ctx.fillRect(10, 570, 100, 10);
-    ctx.fillStyle = spdPct > 0.8 ? '#ff4400' : '#00ffcc';
-    ctx.fillRect(10, 570, 100 * spdPct, 10);
+    ctx.font = 'bold 16px Courier New';
+    ctx.fillText(`LAP: ${lap}`, 20, 30);
+    ctx.fillText(`SPEED: ${Math.round(car.speed * 20)} KM/H`, 20, 50);
 });

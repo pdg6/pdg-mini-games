@@ -2,7 +2,7 @@ const engine = new Engine('gameCanvas');
 engine.gameName = 'space-defender';
 engine.loadHighScore();
 
-const player = new Entity(380, 550, 40, 20, '#00ff44');
+const player = new Entity(380, 550, 40, 20, Assets.COLORS.PRIMARY);
 let bullets = [];
 let enemies = [];
 let enemyBullets = [];
@@ -17,22 +17,116 @@ let waveTimer = 0;
 let enemiesKilled = 0;
 const WAVE_SIZE = 10;
 
-function drawSpaceship(ctx, x, y, c) {
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = c;
-    ctx.fillStyle = c;
+// Boss state
+let boss = null;
+const BOSS_WAVE_INTERVAL = 5;
+
+function spawnBoss() {
+    boss = {
+        x: 300, y: -200, 
+        targetY: 80,
+        width: 200, height: 120,
+        hp: 50 + wave * 10,
+        maxHp: 50 + wave * 10,
+        shootTimer: 0,
+        moveTimer: 0,
+        color: Assets.COLORS.DANGER,
+        phase: 'approach'
+    };
+    playSound('levelup');
+}
+
+function updateBoss(dt, factor) {
+    if (!boss) return;
+
+    if (boss.phase === 'approach') {
+        boss.y += 2 * factor;
+        if (boss.y >= boss.targetY) boss.phase = 'battle';
+    } else {
+        boss.moveTimer += dt;
+        boss.x = 300 + Math.sin(boss.moveTimer / 1000) * 200;
+        
+        // Shooting
+        boss.shootTimer += dt;
+        if (boss.shootTimer > 1000) {
+            // Triple spread
+            for(let i=-1; i<=1; i++) {
+                enemyBullets.push({
+                    x: boss.x + boss.width/2, y: boss.y + boss.height,
+                    vx: i * 2, vy: 4, w: 10, h: 10
+                });
+            }
+            boss.shootTimer = 0;
+            playSound('shoot');
+        }
+    }
+
+    // Collision with player bullets
+    bullets.forEach(b => {
+        if (!b.dead && b.x > boss.x && b.x < boss.x + boss.width && b.y > boss.y && b.y < boss.y + boss.height) {
+            b.dead = true;
+            boss.hp--;
+            engine.spawnSpark(b.x, b.y, '#fff');
+            if (boss.hp <= 0) {
+                // Boss dead
+                for(let i=0; i<50; i++) engine.spawnSpark(boss.x + Math.random()*boss.width, boss.y + Math.random()*boss.height, boss.color);
+                engine.addShake(30);
+                playSound('death');
+                boss = null;
+                engine.score += 1000;
+                wave++;
+                enemiesKilled = 0; // Reset for next wave
+            }
+        }
+    });
+
+    // Collision with player
+    if (rectIntersect(player.x, player.y, player.width, player.height, boss.x, boss.y, boss.width, boss.height)) {
+        if (!shieldActive) engine.state = 'GAMEOVER';
+    }
+}
+
+function drawBoss(ctx) {
+    if (!boss) return;
+    
+    // Mother-ship body
+    ctx.fillStyle = boss.color;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = boss.color;
+    
+    // Complex shape
     ctx.beginPath();
-    ctx.moveTo(x + 20, y);
-    ctx.lineTo(x + 40, y + 20);
-    ctx.lineTo(x + 20, y + 15);
-    ctx.lineTo(x, y + 20);
+    ctx.moveTo(boss.x, boss.y + 40);
+    ctx.lineTo(boss.x + boss.width/2, boss.y);
+    ctx.lineTo(boss.x + boss.width, boss.y + 40);
+    ctx.lineTo(boss.x + boss.width - 20, boss.y + boss.height);
+    ctx.lineTo(boss.x + 20, boss.y + boss.height);
     ctx.closePath();
     ctx.fill();
-    
-    // Engine glow
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 18, y + 18, 4, 4 + Math.random() * 4);
+
+    // Glowing core
+    const pulse = (Math.sin(performance.now() / 200) + 1) / 2;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(boss.x + boss.width/2, boss.y + boss.height/2 + 10, 30, 0, Math.PI*2);
+    ctx.fill();
+
+    // HP Bar
     ctx.shadowBlur = 0;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(boss.x, boss.y - 30, boss.width, 10);
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(boss.x, boss.y - 30, boss.width * (boss.hp / boss.maxHp), 10);
+}
+
+function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
+}
+
+function drawSpaceship(ctx, x, y, c) {
+    Assets.renderPlayer(ctx, x, y, 40, 20, {
+        state: engine.keys['Space'] ? 'moving' : 'idle'
+    });
     
     // Shield visual
     if (shieldActive) {
@@ -94,8 +188,46 @@ engine.start(() => {
     wave = 1;
     waveTimer = 0;
     enemiesKilled = 0;
+    boss = null;
 }, (dt) => {
     const factor = dt / 16.67;
+    
+    // Boss update takes priority
+    if (boss) {
+        updateBoss(dt, factor);
+    } else {
+        // Only spawn enemies and progress waves if no boss
+        const spawnRate = Math.max(300, 1000 - wave * 50);
+        spawnTimer += dt;
+        if (spawnTimer > spawnRate && enemies.length < 15) {
+            let type = Math.random();
+            let e = new Entity(Math.random() * 720 + 20, -40, 30, 30, Assets.COLORS.SECONDARY);
+            if (type > 0.85) { 
+                e.color = Assets.COLORS.DANGER; e.hp = 3; e.maxHp = 3; e.width = 40; e.height = 40;
+                e.canShoot = true; e.shootTimer = 0;
+            } else if (type > 0.7) {
+                e.color = Assets.COLORS.HIGHLIGHT; e.hp = 2; e.maxHp = 2;
+                e.canShoot = false;
+            } else { 
+                e.hp = 1; e.maxHp = 1; e.canShoot = false;
+            }
+            e.movePattern = Math.random() > 0.7 ? 'zigzag' : 'straight';
+            e.moveTimer = 0;
+            enemies.push(e);
+            spawnTimer = 0;
+        }
+
+        // Wave progression to boss
+        if (enemiesKilled >= WAVE_SIZE && enemies.length === 0) {
+            if (wave % BOSS_WAVE_INTERVAL === 0) {
+                spawnBoss();
+            } else {
+                wave++;
+                enemiesKilled = 0;
+                playSound('levelup');
+            }
+        }
+    }
     
     // Player movement
     if (engine.keys['ArrowLeft'] || engine.keys['KeyA']) player.x -= 6 * factor;
@@ -106,15 +238,16 @@ engine.start(() => {
     if (fireCooldown > 0) fireCooldown -= dt;
     if (engine.keys['Space'] && fireCooldown <= 0) {
         const cooldown = fireLevel >= 3 ? 120 : 200;
+        playSound('shoot');
         if (fireLevel === 1) {
-            bullets.push(new Entity(player.x + 18, player.y, 4, 10, '#00ffff'));
+            bullets.push(new Entity(player.x + 18, player.y, 4, 10, Assets.COLORS.TERTIARY));
         } else if (fireLevel === 2) {
-            bullets.push(new Entity(player.x + 10, player.y, 4, 10, '#00ffff'));
-            bullets.push(new Entity(player.x + 26, player.y, 4, 10, '#00ffff'));
+            bullets.push(new Entity(player.x + 10, player.y, 4, 10, Assets.COLORS.TERTIARY));
+            bullets.push(new Entity(player.x + 26, player.y, 4, 10, Assets.COLORS.TERTIARY));
         } else {
-            bullets.push(new Entity(player.x + 18, player.y - 5, 4, 10, '#00ffff'));
-            bullets.push(new Entity(player.x + 6, player.y, 3, 8, '#00aaff'));
-            bullets.push(new Entity(player.x + 30, player.y, 3, 8, '#00aaff'));
+            bullets.push(new Entity(player.x + 18, player.y - 5, 4, 10, Assets.COLORS.TERTIARY));
+            bullets.push(new Entity(player.x + 6, player.y, 3, 8, Assets.COLORS.TERTIARY));
+            bullets.push(new Entity(player.x + 30, player.y, 3, 8, Assets.COLORS.TERTIARY));
         }
         fireCooldown = cooldown;
     }
@@ -123,27 +256,6 @@ engine.start(() => {
     if (shieldActive) {
         shieldTimer -= dt;
         if (shieldTimer <= 0) shieldActive = false;
-    }
-    
-    // Wave system
-    const spawnRate = Math.max(300, 1000 - wave * 50);
-    spawnTimer += dt;
-    if (spawnTimer > spawnRate && enemies.length < 15) {
-        let type = Math.random();
-        let e = new Entity(Math.random() * 720 + 20, -40, 30, 30, '#ff00ff');
-        if (type > 0.85) { 
-            e.color = '#ff0000'; e.hp = 3; e.maxHp = 3; e.width = 40; e.height = 40;
-            e.canShoot = true; e.shootTimer = 0;
-        } else if (type > 0.7) {
-            e.color = '#ffaa00'; e.hp = 2; e.maxHp = 2;
-            e.canShoot = false;
-        } else { 
-            e.hp = 1; e.maxHp = 1; e.canShoot = false;
-        }
-        e.movePattern = Math.random() > 0.7 ? 'zigzag' : 'straight';
-        e.moveTimer = 0;
-        enemies.push(e);
-        spawnTimer = 0;
     }
     
     // Bullets move
@@ -258,6 +370,7 @@ engine.start(() => {
     bullets = bullets.filter(b => b.y > -20 && !b.dead);
     enemies = enemies.filter(e => e.y < 650 && !e.dead);
 }, (ctx) => {
+    drawBoss(ctx);
     drawSpaceship(ctx, player.x, player.y, player.color);
     
     bullets.forEach(b => {
