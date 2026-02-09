@@ -7,9 +7,9 @@ let goal = {};
 
 function loadLevelEntities(levelNum) {
     const level = levels[(levelNum - 1) % levels.length];
-    platforms = JSON.parse(JSON.stringify(level.platforms));
-    movingPlatforms = JSON.parse(JSON.stringify(level.movingPlatforms));
-    fires = JSON.parse(JSON.stringify(level.fires));
+    platforms = structuredClone(level.platforms);
+    movingPlatforms = structuredClone(level.movingPlatforms);
+    fires = structuredClone(level.fires);
     coins = level.coins.map(c => ({ ...c, collected: false, bobOffset: Math.random() * Math.PI * 2 }));
     goal = { ...level.goal };
     return level.playerStart;

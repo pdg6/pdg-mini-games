@@ -16,10 +16,10 @@ class Engine {
         // Systems
         this.shake = 0;
         this.particles = [];
+        this.gameName = '';
 
         window.addEventListener('keydown', e => {
             this.keys[e.code] = true;
-            this.keysPressed[e.code] = true;
             // Prevent scrolling
             if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
         });
@@ -39,8 +39,32 @@ class Engine {
         this.canvas.addEventListener('mouseup', () => this.mouse.down = false);
     }
 
-    // Check if key was justified pressed this frame (needs manual reset if used in loop)
+    // Check if key is currently held
     isDown(code) { return this.keys[code]; }
+
+    // Check if key was just pressed (one-shot). Automatically consumes the press.
+    justPressed(code) {
+        if (this.keys[code] && !this.keysPressed[code]) {
+            this.keysPressed[code] = true;
+            return true;
+        }
+        return false;
+    }
+
+    // Load high score for current game from localStorage
+    loadHighScore() {
+        const key = 'highScore_' + (this.gameName || 'default');
+        this.highScore = parseInt(localStorage.getItem(key)) || 0;
+    }
+
+    // Save high score
+    saveHighScore() {
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            const key = 'highScore_' + (this.gameName || 'default');
+            localStorage.setItem(key, this.highScore);
+        }
+    }
 
     start(setup, update, draw) {
         setup();
@@ -61,6 +85,7 @@ class Engine {
                     this.keys['Space'] = false; // Prevent instant jump
                 }
             } else if (this.state === 'GAMEOVER') {
+                this.saveHighScore();
                 if (this.keys['Space'] || this.mouse.down) {
                     this.state = 'MENU';
                     this.keys['Space'] = false;
@@ -153,17 +178,26 @@ class Engine {
             ctx.fillText("PRESS SPACE TO START", this.width/2, this.height/2);
             ctx.font = '10px "Press Start 2P"';
             ctx.fillStyle = '#888';
-            ctx.fillText("Arrow Keys / WASD to Move", this.width/2, this.height/2 + 30);
+            ctx.fillText("Arrow Keys to Move", this.width/2, this.height/2 + 30);
+            if (this.highScore > 0) {
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillText("BEST: " + this.highScore, this.width/2, this.height/2 + 55);
+            }
         } else if (this.state === 'GAMEOVER') {
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(0, 0, this.width, this.height);
             ctx.fillStyle = '#ff0044';
-            ctx.fillText("GAME OVER", this.width/2, this.height/2 - 20);
+            ctx.fillText("GAME OVER", this.width/2, this.height/2 - 30);
             ctx.fillStyle = '#fff';
-            ctx.fillText("SCORE: " + this.score, this.width/2, this.height/2 + 20);
+            ctx.fillText("SCORE: " + this.score, this.width/2, this.height/2 + 10);
+            if (this.highScore > 0) {
+                ctx.font = '12px "Press Start 2P"';
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillText("BEST: " + this.highScore, this.width/2, this.height/2 + 35);
+            }
             ctx.font = '10px "Press Start 2P"';
             ctx.fillStyle = '#888';
-            ctx.fillText("Press Space to Retry", this.width/2, this.height/2 + 50);
+            ctx.fillText("Press Space to Retry", this.width/2, this.height/2 + 60);
         } else {
             // HUD
             ctx.textAlign = 'right';

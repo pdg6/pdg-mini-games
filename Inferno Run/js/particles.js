@@ -31,20 +31,28 @@ function updateFireParticles(fires) {
         }
     });
     
-    for (let i = fireParticles.length - 1; i >= 0; i--) {
-        const p = fireParticles[i];
+    let fi = fireParticles.length;
+    while (fi--) {
+        const p = fireParticles[fi];
         p.y += p.dy; p.x += p.dx;
         p.life -= 0.03; p.size *= 0.97;
-        if (p.life <= 0) fireParticles.splice(i, 1);
+        if (p.life <= 0) {
+            fireParticles[fi] = fireParticles[fireParticles.length - 1];
+            fireParticles.pop();
+        }
     }
 }
 
 function updateParticles() {
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+    let pi = particles.length;
+    while (pi--) {
+        const p = particles[pi];
         p.x += p.dx; p.y += p.dy;
         p.dy += 0.2; p.life -= p.decay;
-        if (p.life <= 0) particles.splice(i, 1);
+        if (p.life <= 0) {
+            particles[pi] = particles[particles.length - 1];
+            particles.pop();
+        }
     }
 }
 
