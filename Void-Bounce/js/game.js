@@ -126,7 +126,7 @@ engine.start(() => {
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = Assets.COLORS.primary; ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
     ctx.strokeStyle = '#fff'; ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
-    engine.drawParticles();
+    engine.drawParticles(ctx);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Courier New';
     ctx.fillText(`SCORE: ${engine.score}`, 20, 30);
     ctx.fillText(`LIVES: ${'♥'.repeat(lives)}`, 20, 55);

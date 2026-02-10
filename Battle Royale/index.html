@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Battle Royale</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass through to canvas */
+        }
+
+        .hud-panel {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        #alive-counter { top: 20px; right: 20px; font-size: 24px; color: #ff4757; }
+        #zone-timer { top: 60px; right: 20px; font-size: 18px; color: #7bed9f; }
+        #health-bar-container { 
+            bottom: 30px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            width: 300px; 
+            height: 20px; 
+            background: #333; 
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #health-fill {
+            width: 100%;
+            height: 100%;
+            background: #2ed573;
+            transition: width 0.2s;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        h1 { font-size: 60px; margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 5px; color: #ffa502; text-shadow: 2px 2px #000; }
+        p { font-size: 20px; color: #ccc; margin-bottom: 30px; }
+        button {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: #3742fa;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px #2f3542;
+            transition: transform 0.1s;
+        }
+        button:active { transform: translateY(4px); box-shadow: 0 0 #2f3542; }
+        .hidden { display: none !important; }
+
+        /* Mobile controls hint */
+        .controls { position: absolute; top: 20px; left: 20px; font-size: 14px; opacity: 0.7; }
+    </style>
+</head>
+<body>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <div class="controls">
+            WASD to Move<br>
+            Mouse to Aim<br>
+            Click to Shoot
+        </div>
+        <div id="alive-counter">Alive: 50</div>
+        <div id="zone-timer">Zone Shrinking...</div>
+        <div id="health-bar-container"><div id="health-fill"></div></div>
+    </div>
+
+    <!-- Game Over / Start Screen -->
+    <div id="overlay">
+        <h1 id="title-text">ROYALE.JS</h1>
+        <p id="score-text">Survive the storm. Eliminate enemies.</p>
+        <button id="start-btn">DROP IN</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+/** 
+ * CONFIGURATION & SETUP 
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game State
+let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+let lastTime = 0;
+const MAP_SIZE = 2500;
+let camera = { x: 0, y: 0 };
+
+// Input State
+const keys = {};
+const mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false };
+
+// Game Objects
+let player;
+let enemies = [];
+let bullets = [];
+let particles = [];
+
+// The Zone (Storm)
+let zone = {
+    radius: MAP_SIZE,
+    targetRadius: 0,
+    shrinkSpeed: 15, // pixels per second
+    damage: 10 // damage per second
+};
+
+/**
+ * CLASSES
+ */
+class Entity {
+    constructor(x, y, radius, color, speed) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+        this.speed = speed;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.angle = 0;
+        this.dead = false;
+        this.cooldown = 0;
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        // Spawn blood particles
+        for(let i=0; i<5; i++) {
+            particles.push(new Particle(this.x, this.y, this.color));
+        }
+        if (this.hp <= 0) this.dead = true;
+    }
+
+    checkBoundaries() {
+        if (this.x < -MAP_SIZE/2) this.x = -MAP_SIZE/2;
+        if (this.x > MAP_SIZE/2) this.x = MAP_SIZE/2;
+        if (this.y < -MAP_SIZE/2) this.y = -MAP_SIZE/2;
+        if (this.y > MAP_SIZE/2) this.y = MAP_SIZE/2;
+    }
+    
+    shoot() {
+        if (this.cooldown <= 0) {
+            bullets.push(new Bullet(this.x, this.y, this.angle, this));
+            this.cooldown = 15; // Frames between shots
+        }
+    }
+}
+
+class Player extends Entity {
+    constructor() {
+        super(0, 0, 15, '#3498db', 200); // Blue
+    }
+
+    update(dt) {
+        // Movement
+        let dx = 0; 
+        let dy = 0;
+        if (keys['w'] || keys['W']) dy -= 1;
+        if (keys['s'] || keys['S']) dy += 1;
+        if (keys['a'] || keys['A']) dx -= 1;
+        if (keys['d'] || keys['D']) dx += 1;
+
+        // Normalize diagonal movement
+        if (dx !== 0 || dy !== 0) {
+            const length = Math.sqrt(dx*dx + dy*dy);
+            dx /= length;
+            dy /= length;
+            this.x += dx * this.speed * dt;
+            this.y += dy * this.speed * dt;
+        }
+
+        this.checkBoundaries();
+
+        // Rotation
+        this.angle = Math.atan2(mouse.worldY - this.y, mouse.worldX - this.x);
+
+        // Shooting
+        if (mouse.down) this.shoot();
+        if (this.cooldown > 0) this.cooldown--;
+    }
+}
+
+class Bot extends Entity {
+    constructor() {
+        // Spawn random location
+        const x = (Math.random() - 0.5) * MAP_SIZE;
+        const y = (Math.random() - 0.5) * MAP_SIZE;
+        super(x, y, 15, '#e74c3c', 160 + Math.random() * 40); // Red
+        
+        // Simple AI State
+        this.moveDir = { x: Math.random()-0.5, y: Math.random()-0.5 };
+        this.changeDirTimer = 0;
+        this.target = null;
+    }
+
+    update(dt) {
+        // AI Logic
+        
+        // 1. Storm Avoidance (High Priority)
+        const distFromCenter = Math.sqrt(this.x*this.x + this.y*this.y);
+        let inStorm = distFromCenter > zone.radius;
+
+        if (inStorm) {
+            // Run to center
+            const angleToCenter = Math.atan2(-this.y, -this.x);
+            this.x += Math.cos(angleToCenter) * this.speed * dt;
+            this.y += Math.sin(angleToCenter) * this.speed * dt;
+            this.angle = angleToCenter;
+        } else {
+            // 2. Combat / Wandering
+            // Find nearest enemy (can be player or other bot)
+            let nearest = null;
+            let minDist = 600; // View distance
+
+            // Check player
+            if (!player.dead) {
+                const d = Math.hypot(player.x - this.x, player.y - this.y);
+                if (d < minDist) { minDist = d; nearest = player; }
+            }
+
+            // Simple movement
+            if (nearest) {
+                // Chase and Shoot
+                this.angle = Math.atan2(nearest.y - this.y, nearest.x - this.x);
+                
+                // Keep some distance
+                if (minDist > 200) {
+                    this.x += Math.cos(this.angle) * this.speed * dt;
+                    this.y += Math.sin(this.angle) * this.speed * dt;
+                } else if (minDist < 100) {
+                    // Back up
+                    this.x -= Math.cos(this.angle) * this.speed * dt;
+                    this.y -= Math.sin(this.angle) * this.speed * dt;
+                }
+
+                // Raycast check (very basic) -> Shoot
+                this.shoot();
+
+            } else {
+                // Wander
+                this.changeDirTimer--;
+                if (this.changeDirTimer <= 0) {
+                    const randomAngle = Math.random() * Math.PI * 2;
+                    this.moveDir = { x: Math.cos(randomAngle), y: Math.sin(randomAngle) };
+                    this.changeDirTimer = 50 + Math.random() * 100;
+                }
+                this.x += this.moveDir.x * (this.speed * 0.6) * dt;
+                this.y += this.moveDir.y * (this.speed * 0.6) * dt;
+                this.angle = Math.atan2(this.moveDir.y, this.moveDir.x);
+            }
+        }
+        
+        this.checkBoundaries();
+        if (this.cooldown > 0) this.cooldown--;
+    }
+}
+
+class Bullet {
+    constructor(x, y, angle, owner) {
+        this.x = x;
+        this.y = y;
+        this.vx = Math.cos(angle) * 800;
+        this.vy = Math.sin(angle) * 800;
+        this.owner = owner; // Who shot this?
+        this.radius = 4;
+        this.life = 1.5; // Seconds
+        this.dead = false;
+    }
+
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life -= dt;
+        if (this.life <= 0) this.dead = true;
+
+        // Collision Check
+        const targets = [player, ...enemies];
+        for (let t of targets) {
+            if (t === this.owner || t.dead) continue;
+            
+            const dist = Math.hypot(this.x - t.x, this.y - t.y);
+            if (dist < t.radius + this.radius) {
+                t.takeDamage(15);
+                this.dead = true;
+                break;
+            }
+        }
+    }
+
+    draw() {
+        ctx.fillStyle = '#fffa65';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        const a = Math.random() * Math.PI * 2;
+        const s = Math.random() * 100;
+        this.vx = Math.cos(a) * s;
+        this.vy = Math.sin(a) * s;
+        this.life = 0.5;
+        this.color = color;
+    }
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life -= dt;
+    }
+    draw() {
+        ctx.globalAlpha = this.life * 2;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, 4, 4);
+        ctx.globalAlpha = 1;
+    }
+}
+
+/**
+ * ENGINE FUNCTIONS
+ */
+
+function init() {
+    resize();
+    window.addEventListener('resize', resize);
+    
+    // Input Listeners
+    window.addEventListener('keydown', e => keys[e.key] = true);
+    window.addEventListener('keyup', e => keys[e.key] = false);
+    window.addEventListener('mousemove', e => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+    });
+    window.addEventListener('mousedown', () => mouse.down = true);
+    window.addEventListener('mouseup', () => mouse.down = false);
+
+    document.getElementById('start-btn').addEventListener('click', startGame);
+
+    requestAnimationFrame(gameLoop);
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+function startGame() {
+    gameState = 'PLAYING';
+    document.getElementById('overlay').classList.add('hidden');
+    
+    // Reset World
+    player = new Player();
+    enemies = [];
+    bullets = [];
+    particles = [];
+    
+    // Create 49 bots (Total 50 alive)
+    for(let i=0; i<49; i++) {
+        enemies.push(new Bot());
+    }
+
+    // Reset Zone
+    zone.radius = MAP_SIZE; // Start covering whole map
+    zone.damageTimer = 0;
+}
+
+function gameLoop(timestamp) {
+    let dt = (timestamp - lastTime) / 1000;
+    if (dt > 0.1) dt = 0.1; // Cap dt for lag
+    lastTime = timestamp;
+
+    if (gameState === 'PLAYING') {
+        update(dt);
+        draw();
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+function update(dt) {
+    if (player.dead) {
+        endGame(false);
+        return;
+    }
+    if (enemies.length === 0) {
+        endGame(true);
+        return;
+    }
+
+    // Update Player
+    player.update(dt);
+
+    // Update Enemies
+    enemies.forEach(e => e.update(dt));
+    enemies = enemies.filter(e => !e.dead);
+
+    // Update Bullets
+    bullets.forEach(b => b.update(dt));
+    bullets = bullets.filter(b => !b.dead);
+
+    // Update Particles
+    particles.forEach(p => p.update(dt));
+    particles = particles.filter(p => p.life > 0);
+
+    // Update Zone
+    if (zone.radius > 100) {
+        zone.radius -= zone.shrinkSpeed * dt;
+    }
+    
+    // Zone Damage Logic
+    zone.damageTimer = (zone.damageTimer || 0) + dt;
+    if (zone.damageTimer > 1) { // Apply damage every second
+        zone.damageTimer = 0;
+        const allEntities = [player, ...enemies];
+        allEntities.forEach(ent => {
+            const dist = Math.hypot(ent.x, ent.y);
+            if (dist > zone.radius) {
+                ent.takeDamage(zone.damage);
+            }
+        });
+    }
+
+    // Update Camera (Lerp for smoothness)
+    camera.x = player.x - canvas.width / 2;
+    camera.y = player.y - canvas.height / 2;
+
+    // Convert mouse screen pos to world pos
+    mouse.worldX = mouse.x + camera.x;
+    mouse.worldY = mouse.y + camera.y;
+
+    // Update UI
+    document.getElementById('alive-counter').innerText = `Alive: ${enemies.length + 1}`;
+    document.getElementById('health-fill').style.width = `${Math.max(0, player.hp)}%`;
+    document.getElementById('zone-timer').innerText = `Zone Radius: ${Math.floor(zone.radius)}`;
+}
+
+function draw() {
+    // Clear screen
+    ctx.fillStyle = '#222';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    // Apply Camera Transform
+    ctx.translate(-camera.x, -camera.y);
+
+    // 1. Draw Map Background (Grid)
+    drawGrid();
+
+    // 2. Draw Zone (The Storm)
+    ctx.beginPath();
+    ctx.arc(0, 0, zone.radius, 0, Math.PI * 2);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#7bed9f'; // Safe zone border
+    ctx.stroke();
+    
+    // Draw the storm overlay (outside the circle)
+    // We do this by drawing a massive rectangle with a hole cut out
+    ctx.beginPath();
+    ctx.rect(camera.x - 1000, camera.y - 1000, canvas.width + 2000, canvas.height + 2000);
+    ctx.arc(0, 0, zone.radius, 0, Math.PI*2, true);
+    ctx.fillStyle = 'rgba(100, 0, 255, 0.2)'; // Storm color
+    ctx.fill();
+
+    // 3. Draw Bullets
+    bullets.forEach(b => b.draw());
+
+    // 4. Draw Enemies
+    enemies.forEach(e => drawEntity(e));
+
+    // 5. Draw Player
+    drawEntity(player, true);
+
+    // 6. Draw Particles
+    particles.forEach(p => p.draw());
+
+    ctx.restore();
+}
+
+function drawEntity(ent, isPlayer = false) {
+    ctx.save();
+    ctx.translate(ent.x, ent.y);
+    ctx.rotate(ent.angle);
+
+    // Body
+    ctx.beginPath();
+    ctx.arc(0, 0, ent.radius, 0, Math.PI * 2);
+    ctx.fillStyle = ent.color;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
+
+    // Hands/Gun
+    ctx.fillStyle = '#555';
+    ctx.beginPath();
+    ctx.arc(10, 8, 6, 0, Math.PI*2); // Right hand
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(10, -8, 6, 0, Math.PI*2); // Left hand
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawGrid() {
+    const size = 100;
+    // Calculate start/end based on camera to optimize
+    const startX = Math.floor(camera.x / size) * size;
+    const startY = Math.floor(camera.y / size) * size;
+    
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+
+    for (let x = startX; x < camera.x + canvas.width; x += size) {
+        ctx.moveTo(x, camera.y);
+        ctx.lineTo(x, camera.y + canvas.height);
+    }
+    for (let y = startY; y < camera.y + canvas.height; y += size) {
+        ctx.moveTo(camera.x, y);
+        ctx.lineTo(camera.x + canvas.width, y);
+    }
+    ctx.stroke();
+
+    // Draw Map Borders
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(-MAP_SIZE/2, -MAP_SIZE/2, MAP_SIZE, MAP_SIZE);
+}
+
+function endGame(victory) {
+    gameState = 'GAMEOVER';
+    const overlay = document.getElementById('overlay');
+    const title = document.getElementById('title-text');
+    const score = document.getElementById('score-text');
+    const btn = document.getElementById('start-btn');
+
+    overlay.classList.remove('hidden');
+    
+    if (victory) {
+        title.innerText = "VICTORY ROYALE";
+        title.style.color = "#2ed573";
+        score.innerText = "You are the last survivor!";
+    } else {
+        title.innerText = "ELIMINATED";
+        title.style.color = "#ff4757";
+        score.innerText = `Better luck next time. Enemies remaining: ${enemies.length}`;
+    }
+    btn.innerText = "PLAY AGAIN";
+}
+
+// Boot up
+init();
+
+</script>
+</body>
+</html>

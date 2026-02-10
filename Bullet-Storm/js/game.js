@@ -176,7 +176,7 @@ engine.start(setup, (dt) => {
         ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(player.x, player.y, 4, 0, Math.PI*2); ctx.fill();
         ctx.strokeStyle = '#fff'; ctx.stroke();
     }
-    engine.drawParticles();
+    engine.drawParticles(ctx);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Courier New';
     ctx.fillText(`SCORE: ${engine.score}`, 20, 30);
     ctx.fillText(`GRAZE: ${grazeCombo}`, 20, 55);

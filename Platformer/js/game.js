@@ -158,7 +158,7 @@ engine.start(() => { resetGame(); }, (dt) => {
     Assets.renderPlayer(ctx, 0, 0, 40, 40, { vx: speed, vy: player.vy });
     ctx.restore();
 
-    engine.drawParticles();
+    engine.drawParticles(ctx);
 
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 20px Courier New';

@@ -170,7 +170,7 @@ function draw() {
     Assets.renderPlayer(ctx, player.x, player.y, player.width, player.height, player.vx, player.vy);
 
     // Particles
-    engine.drawParticles();
+    engine.drawParticles(ctx);
 
     // UI
     drawUI(ctx);

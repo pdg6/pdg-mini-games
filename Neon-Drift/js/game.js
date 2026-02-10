@@ -178,7 +178,7 @@ engine.start(() => {
     Assets.renderPlayer(ctx, car.x - 15, car.y - 12, 30, 24, car.wx, car.wy);
 
     // Particles
-    engine.drawParticles();
+    engine.drawParticles(ctx);
 
     // HUD
     ctx.fillStyle = '#fff';

@@ -215,7 +215,6 @@ class Engine {
         this.flashTimer = duration;
         this.addShake(10);
     }
-    }
 
     drawUI(ctx) {
         ctx.textAlign = 'center';
