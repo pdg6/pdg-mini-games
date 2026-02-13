@@ -15,11 +15,13 @@ class Engine {
         
         // Systems
         this.shake = 0;
+        this.flashTimer = 0;
         this.particles = [];
         this.gameName = '';
 
         // Audio System Integration
         this.audioEnabled = false;
+        this.volume = 1.0;
 
         window.addEventListener('keydown', e => {
             this.keys[e.code] = true;
@@ -82,7 +84,7 @@ class Engine {
             const dt = Math.min((timeStamp - this.lastTime), 50); // Cap dt
             this.lastTime = timeStamp;
 
-            this.updateScreenShake(dt);
+            this.updateTimers(dt);
             
             // Global State Management
             if (this.state === 'MENU') {
@@ -143,10 +145,19 @@ class Engine {
         this.shake = amount;
     }
 
-    updateScreenShake(dt) {
+    flash(duration = 500) {
+        this.flashTimer = duration;
+        this.addShake(10);
+    }
+
+    updateTimers(dt) {
         if (this.shake > 0) {
-            this.shake -= dt * 0.5;
+            this.shake -= dt * 0.05;
             if (this.shake < 0) this.shake = 0;
+        }
+        if (this.flashTimer > 0) {
+            this.flashTimer -= dt;
+            if (this.flashTimer < 0) this.flashTimer = 0;
         }
     }
 
@@ -161,6 +172,22 @@ class Engine {
                 life: 1.0,
                 color,
                 size: Math.random() * 3 + 1
+            });
+        }
+    }
+
+    spawnSpark(x, y, color, count = 5, speed = 4) {
+        for(let i=0; i<count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const vel = (Math.random() + 0.5) * speed;
+            this.particles.push({
+                x, y,
+                vx: Math.cos(angle) * vel,
+                vy: Math.sin(angle) * vel,
+                life: 1.0,
+                color,
+                isSpark: true,
+                size: 1 + Math.random() * 2
             });
         }
     }
@@ -194,34 +221,12 @@ class Engine {
         ctx.globalAlpha = 1.0;
     }
 
-    spawnSpark(x, y, color, count = 5, speed = 4) {
-        for(let i=0; i<count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const vel = (Math.random() + 0.5) * speed;
-            this.particles.push({
-                x, y,
-                vx: Math.cos(angle) * vel,
-                vy: Math.sin(angle) * vel,
-                life: 1.0,
-                color,
-                isSpark: true,
-                size: 1 + Math.random() * 2
-            });
-        }
-    }
-
-    // New: Screen Flash (Chromatic Aberration Trigger)
-    flash(duration = 500) {
-        this.flashTimer = duration;
-        this.addShake(10);
-    }
-
     drawUI(ctx) {
         ctx.textAlign = 'center';
         ctx.font = '16px "Press Start 2P"';
         
         if (this.state === 'MENU') {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
             ctx.fillRect(0, 0, this.width, this.height);
             ctx.fillStyle = '#fff';
             ctx.fillText("PRESS SPACE TO START", this.width/2, this.height/2);
@@ -233,7 +238,7 @@ class Engine {
                 ctx.fillText("BEST: " + this.highScore, this.width/2, this.height/2 + 55);
             }
         } else if (this.state === 'GAMEOVER') {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
             ctx.fillRect(0, 0, this.width, this.height);
             ctx.fillStyle = '#ff0044';
             ctx.fillText("GAME OVER", this.width/2, this.height/2 - 30);
@@ -251,8 +256,19 @@ class Engine {
             // HUD
             ctx.textAlign = 'right';
             ctx.fillStyle = '#fff';
-            ctx.font = '12px "Press Start 2P"';
+            ctx.font = '16px Courier, monospace';
             ctx.fillText(this.score, this.width - 20, 30);
+            
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 12px Courier, monospace';
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillText(this.gameName.toUpperCase(), 20, 30);
+        }
+
+        // Draw Flash Effect
+        if (this.flashTimer > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1.0, this.flashTimer / 500)})`;
+            ctx.fillRect(0, 0, this.width, this.height);
         }
     }
 }
@@ -267,6 +283,8 @@ class Entity {
         this.vx = 0;
         this.vy = 0;
         this.dead = false;
+        this.hp = 1;
+        this.maxHp = 1;
     }
     
     draw(ctx) {
@@ -275,8 +293,9 @@ class Entity {
     }
 
     update(dt) {
-        this.x += this.vx;
-        this.y += this.vy;
+        const factor = dt / 16.67;
+        this.x += this.vx * factor;
+        this.y += this.vy * factor;
     }
 
     collidesWith(other) {
@@ -286,3 +305,4 @@ class Entity {
                this.y + this.height > other.y;
     }
 }
+

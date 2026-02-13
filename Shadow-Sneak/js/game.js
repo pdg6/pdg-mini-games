@@ -232,7 +232,11 @@ engine.start(() => {
     ctx.fillRect(300, 20, 200 * alertLevel, 10);
     ctx.strokeStyle = '#fff'; ctx.strokeRect(300, 20, 200, 10);
 
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px monospace';
-    ctx.fillText('ALERT LEVEL', 360, 45);
-    ctx.fillText('LEVEL ' + level, 20, 30);
+    ctx.fillStyle = Assets.COLORS.PRIMARY;
+    ctx.font = 'bold 12px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText('ALERT LEVEL', 355, 45);
+    ctx.fillText('LEVEL ' + level, 20, 50);
+
+    engine.drawUI(ctx);
 });

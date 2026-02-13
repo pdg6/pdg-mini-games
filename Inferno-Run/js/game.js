@@ -30,14 +30,14 @@ const player = {
 };
 
 // Physics Constants
-const GRAVITY = 0.6;
-const JUMP_FORCE = -13;
-const MAX_SPEED = 6;
-const ACCEL = 0.5;
-const FRICTION = 0.85;
-const DASH_SPEED = 15;
-const DASH_DURATION = 150;
-const DASH_COOLDOWN = 500;
+const GRAVITY = 0.45;
+const JUMP_FORCE = -11;
+const MAX_SPEED = 4.5;
+const ACCEL = 0.25;
+const FRICTION = 0.9;
+const DASH_SPEED = 12;
+const DASH_DURATION = 180;
+const DASH_COOLDOWN = 600;
 
 function setup() {
     loadLevel(currentLevel);
@@ -64,6 +64,7 @@ function update(dt) {
     if (engine.state !== 'PLAY') return;
 
     const now = performance.now();
+    const factor = dt / 16.67;
 
     // Dash logic
     const canDash = (now - player.lastDashTime) > DASH_COOLDOWN;
@@ -92,12 +93,15 @@ function update(dt) {
         if (engine.isDown('ArrowRight') || engine.isDown('KeyD')) inputX++;
 
         if (inputX !== 0) {
-            player.vx += inputX * ACCEL;
+            player.vx += inputX * ACCEL * factor;
             player.facing = inputX;
         } else {
-            player.vx *= FRICTION;
+            player.vx *= Math.pow(FRICTION, factor);
         }
         player.vx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, player.vx));
+
+        // Vertical Movement (Gravity)
+        player.vy += GRAVITY * factor;
 
         // Jump
         if (player.grounded && (engine.justPressed('Space') || engine.isDown('ArrowUp') || engine.isDown('KeyW'))) {
@@ -106,20 +110,17 @@ function update(dt) {
             playSound('jump');
             for(let i=0; i<5; i++) engine.spawnSpark(player.x+14, player.y+32, Assets.COLORS.secondary);
         }
-
-        // Gravity
-        player.vy += GRAVITY;
     }
 
     // Move & Collide
-    player.x += player.vx;
+    player.x += player.vx * factor;
     checkXCollisions();
-    player.y += player.vy;
-    checkYCollisions();
+    player.y += player.vy * factor;
+    checkYCollisions(factor);
 
     // Entity updates
     movingPlatforms.forEach(p => {
-        p.x += p.speed * p.direction;
+        p.x += p.speed * p.direction * factor;
         if (p.x >= p.endX) p.direction = -1;
         else if (p.x <= p.startX) p.direction = 1;
     });
@@ -136,7 +137,7 @@ function update(dt) {
     if (player.y > engine.height) killPlayer();
 
     // Trail cleanup
-    player.trail.forEach(t => t.life -= 0.05);
+    player.trail.forEach(t => t.life -= 0.05 * factor);
     player.trail = player.trail.filter(t => t.life > 0);
 }
 
@@ -181,17 +182,15 @@ function draw() {
 }
 
 function drawUI(ctx) {
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 16px Courier New';
-    ctx.fillText(`LEVEL: ${currentLevel}`, 20, 30);
-    ctx.fillText(`SCORE: ${engine.score}`, 20, 55);
-    
     ctx.fillStyle = Assets.COLORS.secondary;
+    ctx.font = 'bold 16px Courier New';
+    ctx.textAlign = 'left';
+    
     let hearts = '';
     for(let i=0; i<lives; i++) hearts += '♥';
-    ctx.fillText(hearts, 20, 80);
+    ctx.fillText(hearts, 20, 60);
 
-    // engine.drawUI() handles MENU and GAMEOVER overlays automatically
+    // engine.drawUI() handles MENU, GAMEOVER, and basic Score/GameName automatically
 }
 
 function checkXCollisions() {
@@ -204,7 +203,7 @@ function checkXCollisions() {
     });
 }
 
-function checkYCollisions() {
+function checkYCollisions(factor) {
     player.grounded = false;
     [...platforms, ...movingPlatforms].forEach(p => {
         if (rectIntersect(player.x, player.y, player.width, player.height, p.x, p.y, p.width, p.height)) {
@@ -213,7 +212,7 @@ function checkYCollisions() {
                 player.grounded = true;
                 player.vy = 0;
                 // If on moving platform, move with it
-                if (p.speed) player.x += p.speed * p.direction;
+                if (p.speed) player.x += p.speed * p.direction * factor;
             } else if (player.vy < 0) {
                 player.y = p.y + p.height;
                 player.vy = 0;
@@ -241,7 +240,7 @@ function checkTriggers() {
 
 function killPlayer() {
     lives--;
-    engine.shake = 15;
+    engine.flash(300);
     playSound('death');
     for(let i=0; i<20; i++) engine.spawnSpark(player.x+14, player.y+16, Assets.COLORS.primary);
     

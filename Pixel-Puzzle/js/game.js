@@ -6,7 +6,7 @@ const levels = [
     { map: ["XXXXXX","X P  X","X B  X","X  G X","XXXXXX"], name: "BOOT SECTOR" },
     { map: ["XXXXXXX","X P   X","X B X X","X   X X","XXGXXXX"], name: "DATA CORE" },
     { map: ["XXXXXXXX","X  P   X","X XXX  X","X B    X","X    G X","XXXXXXXX"], name: "LOGIC GATE" },
-    { map: ["XXXXXXXX","X P    X","X XXXX X","X B    X","X   XXXX","XXXG   X","XXXXXXXX"], name: "FIREWALL" },
+    { map: ["XXXXXXXX","X P    X","X X XX X","X B    X","X   XXXX","XXXG   X","XXXXXXXX"], name: "FIREWALL" },
     { map: ["XXXXXXXXX","X    P  X","XX XXX  X","X  B    X","X XXX X X","X     G X","XXXXXXXXX"], name: "ENCRYPTION" },
     { map: ["XXXXXXXXXX","X    P   X","X  XXXXX X","X  B     X","X XXXX X X","X      X X","XXXXXXGX X","X        X","XXXXXXXXXX"], name: "QUANTUM LOCK" }
 ];
@@ -168,4 +168,6 @@ engine.start(() => { loadLevel(0); }, (dt) => {
     ctx.font = '12px Courier New';
     ctx.textAlign = 'left';
     ctx.fillText("WASD: MOVE | Z: UNDO | R: RESTART", 20, 580);
+
+    engine.drawUI(ctx);
 });

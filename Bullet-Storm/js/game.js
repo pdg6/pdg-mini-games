@@ -177,11 +177,19 @@ engine.start(setup, (dt) => {
         ctx.strokeStyle = '#fff'; ctx.stroke();
     }
     engine.drawParticles(ctx);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Courier New';
-    ctx.fillText(`SCORE: ${engine.score}`, 20, 30);
+    
+    // HUD
+    ctx.fillStyle = Assets.COLORS.PRIMARY;
+    ctx.font = 'bold 16px Courier New';
+    ctx.textAlign = 'left';
     ctx.fillText(`GRAZE: ${grazeCombo}`, 20, 55);
-    ctx.fillStyle = '#222'; ctx.fillRect(20, 70, 60, 4);
+    
+    ctx.fillStyle = '#222'; 
+    ctx.fillRect(20, 70, 60, 4);
     const cdPct = Math.max(0, (dashCooldown - performance.now()) / DASH_COOLDOWN);
-    ctx.fillStyle = cdPct > 0 ? '#444' : Assets.COLORS.accent;
+    ctx.fillStyle = cdPct > 0 ? '#444' : Assets.COLORS.ACCENT;
     ctx.fillRect(20, 70, 60 * (1 - cdPct), 4);
+
+    engine.drawUI(ctx);
 });
+

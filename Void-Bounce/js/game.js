@@ -127,7 +127,12 @@ engine.start(() => {
     ctx.fillStyle = Assets.COLORS.primary; ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
     ctx.strokeStyle = '#fff'; ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
     engine.drawParticles(ctx);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Courier New';
-    ctx.fillText(`SCORE: ${engine.score}`, 20, 30);
-    ctx.fillText(`LIVES: ${'♥'.repeat(lives)}`, 20, 55);
+
+    // HUD
+    ctx.fillStyle = Assets.COLORS.PRIMARY;
+    ctx.font = 'bold 16px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText(`LIVES: ${'♥'.repeat(lives)}`, 20, 50);
+
+    engine.drawUI(ctx);
 });

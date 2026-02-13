@@ -63,6 +63,7 @@ function updateBoss(dt, factor) {
 
     // Collision with player bullets
     bullets.forEach(b => {
+        if (!boss) return;
         if (!b.dead && b.x > boss.x && b.x < boss.x + boss.width && b.y > boss.y && b.y < boss.y + boss.height) {
             b.dead = true;
             boss.hp--;
@@ -415,13 +416,15 @@ engine.start(() => {
     }
     
     // Wave indicator
-    ctx.font = '8px "Press Start 2P"';
-    ctx.fillStyle = '#888';
+    ctx.font = '12px Courier';
+    ctx.fillStyle = Assets.COLORS.PRIMARY;
     ctx.textAlign = 'left';
-    ctx.fillText('WAVE ' + wave, 10, 590);
+    ctx.fillText('WAVE ' + wave, 20, 580);
     
     if (shieldActive) {
         ctx.fillStyle = '#0088ff';
-        ctx.fillText('SHIELD', 10, 575);
+        ctx.fillText('SHIELD: ' + Math.ceil(shieldTimer/1000) + 's', 20, 560);
     }
+
+    engine.drawUI(ctx);
 });

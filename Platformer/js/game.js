@@ -160,8 +160,10 @@ engine.start(() => { resetGame(); }, (dt) => {
 
     engine.drawParticles(ctx);
 
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 20px Courier New';
+    ctx.fillStyle = Assets.COLORS.PRIMARY;
+    ctx.font = 'bold 16px Courier New';
     ctx.textAlign = 'left';
-    ctx.fillText(`DIST: ${Math.floor(distance)}m`, 20, 40);
+    ctx.fillText(`DIST: ${Math.floor(distance)}m`, 20, 50);
+
+    engine.drawUI(ctx);
 });
