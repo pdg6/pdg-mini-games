@@ -160,9 +160,9 @@ function draw() {
 
     // Dash Trail
     player.trail.forEach(t => {
-        ctx.fillStyle = `rgba(0, 255, 255, ${t.life * 0.5})`;
+        ctx.fillStyle = `rgba(0, 255, 255, ${Math.max(0, t.life) * 0.5})`;
         ctx.beginPath();
-        ctx.arc(t.x, t.y, 10 * t.life, 0, Math.PI*2);
+        ctx.arc(t.x, t.y, Math.max(0, 10 * t.life), 0, Math.PI*2);
         ctx.fill();
     });
 

@@ -120,8 +120,8 @@ engine.start(() => {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center'; ctx.fillText(p.type[0], p.x, p.y+4);
     });
     ballTrail.forEach(t => {
-        ctx.fillStyle = `rgba(0, 255, 255, ${t.life * 0.4})`;
-        ctx.beginPath(); ctx.arc(t.x, t.y, ball.radius * t.life, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = `rgba(0, 255, 255, ${Math.max(0, t.life) * 0.4})`;
+        ctx.beginPath(); ctx.arc(t.x, t.y, Math.max(0, ball.radius * t.life), 0, Math.PI*2); ctx.fill();
     });
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = Assets.COLORS.primary; ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);

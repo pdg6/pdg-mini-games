@@ -1,0 +1,129 @@
+-- COLLISIONS: How Objects Interact in the Game World
+-- This file handles detecting when the player overlaps with platforms, fire, coins, and the goal.
+-- Collision detection is the backbone of any platformer game.
+
+
+-- FUNCTION: checkCollisions
+-- PARAMETERS: gameState, canvas, callbacks
+-- PURPOSE: The master collision function. Called every frame to check all interactions.
+-- CONDITIONAL: if the game state is not "playing" then skip all collision checks and return.
+-- This prevents collision logic from running on menus or game-over screens.
+
+
+-- SECTION: Platform Collisions (AABB - Axis-Aligned Bounding Box)
+
+-- HOW COLLISION DETECTION WORKS:
+-- Every object in the game is represented as a rectangle with x, y, width, and height.
+-- Two rectangles overlap if ALL four of these conditions are true:
+--   1. Player's left edge is less than platform's right edge.
+--   2. Player's right edge is greater than platform's left edge.
+--   3. Player's top edge is less than platform's bottom edge.
+--   4. Player's bottom edge is greater than platform's top edge.
+-- This is called "AABB collision detection" and is the most common method in 2D games.
+
+-- VARIABLE: allPlatforms
+-- TYPE: List of platform objects
+-- PURPOSE: Combines static and moving platforms into one list for collision checking.
+
+-- FOR EACH platform in allPlatforms:
+--   CONDITIONAL: if player rectangle overlaps platform rectangle then resolve the collision.
+--
+--   RESOLVING COLLISIONS - Finding the smallest overlap:
+--   When the player overlaps a platform, we need to figure out FROM WHICH SIDE.
+--   We calculate four overlap distances:
+--
+--   set overlapTop to (player bottom) minus (platform top).
+--   set overlapBottom to (platform bottom) minus (player top).
+--   set overlapLeft to (player right) minus (platform left).
+--   set overlapRight to (platform right) minus (player left).
+--
+--   The SMALLEST overlap tells us which side the collision came from.
+--   This is called "minimum penetration depth" resolution.
+--
+--   CONDITIONAL: if smallest overlap is the top AND player is falling down then
+--     -- The player landed ON TOP of the platform.
+--     set player y to platform top minus player height.
+--     set player vertical velocity to 0.
+--     set player jumping to false.
+--     set player grounded to true.
+--     set player lastGroundedTime to the current time.
+--     -- MOVING PLATFORM: if this platform has a speed, move the player with it.
+--     if platform has speed then add (platform speed times platform direction) to player x.
+--
+--   CONDITIONAL: if smallest overlap is the bottom AND player is moving up then
+--     -- The player hit the UNDERSIDE of the platform (bonked their head).
+--     set player y to platform bottom.
+--     set player vertical velocity to 0.
+--     -- This stops upward momentum, making the player start falling.
+--
+--   CONDITIONAL: if smallest overlap is the left then
+--     -- The player hit the LEFT SIDE of the platform (pushed from the right).
+--     set player x to platform left minus player width.
+--     set player horizontal velocity to 0.
+--     -- WALL DETECTION: if the player is airborne and falling, they are touching a wall.
+--     if player is not grounded AND player is falling then set touchingWall to 1.
+--     -- touchingWall = 1 means the wall is to the player's RIGHT (they face left to wall-slide).
+--
+--   CONDITIONAL: if smallest overlap is the right then
+--     -- The player hit the RIGHT SIDE of the platform (pushed from the left).
+--     set player x to platform right.
+--     set player horizontal velocity to 0.
+--     if player is not grounded AND player is falling then set touchingWall to negative 1.
+--     -- touchingWall = -1 means the wall is to the player's LEFT.
+
+
+-- SECTION: Fire Collisions
+
+-- VARIABLE: dashInvincible
+-- TYPE: Boolean
+-- PURPOSE: When the player is dashing, they are immune to fire damage.
+-- This is a core game mechanic: the dash is both a movement tool and a survival tool.
+
+-- FOR EACH fire hazard in the fires list:
+--   CONDITIONAL: if player is NOT dash-invincible
+--     AND player left is less than fire right minus 5
+--     AND player right is greater than fire left plus 5
+--     AND player top is less than fire bottom
+--     AND player bottom is greater than fire top plus 5 then
+--       call the onDeath callback.
+--
+--   NOTE: The "minus 5" and "plus 5" values shrink the fire hitbox slightly.
+--   This makes fire collisions more forgiving. The visible flames extend slightly
+--   beyond the actual danger zone. This is a common game design trick called
+--   "generous hitboxes" that makes the game feel fair.
+
+
+-- SECTION: Coin Collisions
+
+-- FOR EACH coin in the coins list:
+--   CONDITIONAL: if this coin has NOT already been collected
+--     AND player overlaps the coin's 20x20 pixel area then
+--       set the coin's collected flag to true.
+--       call the onCoinCollect callback (adds to score).
+--       play the "coin" sound effect.
+--       spawn a particle effect at the coin's center position.
+--       -- The particle type "coin" creates 8 golden sparkle particles.
+--
+--   NOTE: Once collected, the coin stays in the list but is skipped in future checks.
+--   This is simpler than removing items from a list during iteration.
+
+
+-- SECTION: Goal Collision
+
+-- The goal is a gate the player must reach to complete the level.
+-- CONDITIONAL: if player rectangle overlaps goal rectangle then
+--   call the onWin callback.
+-- This is a simple overlap check with no special resolution needed.
+-- Touching the goal in any way triggers level completion.
+
+
+-- SECTION: Boundary Collisions
+
+-- These keep the player inside the visible game area.
+-- CONDITIONAL: if player x is less than 0 then set player x to 0.
+--   This prevents the player from walking off the left edge of the screen.
+-- CONDITIONAL: if player right edge exceeds canvas width then clamp to canvas width.
+--   This prevents walking off the right edge.
+-- CONDITIONAL: if player y is greater than canvas height then call onDeath.
+--   If the player falls below the bottom of the screen, they die.
+--   There is no floor at the bottom. Falling off the world is lethal.

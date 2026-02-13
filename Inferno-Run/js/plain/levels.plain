@@ -1,0 +1,159 @@
+-- LEVELS: The Blueprint of Every Stage
+-- This file defines the layout of all game levels using lists of objects.
+-- Each level is a data structure (not code) that describes WHERE things are placed.
+-- The game reads this data and builds the level from it.
+
+
+-- VARIABLE: levels
+-- TYPE: List of level objects (an array of 3 levels)
+-- PURPOSE: Contains every level in the game. Each level is a complete map definition.
+-- Each level object has these properties:
+--   platforms        - List of solid ground the player can stand on.
+--   movingPlatforms  - List of platforms that slide back and forth.
+--   fires            - List of fire hazards that kill the player on contact.
+--   coins            - List of collectible coins for score.
+--   goal             - The exit gate the player must reach.
+--   playerStart      - Where the player begins when the level loads.
+
+
+-- SECTION: Understanding Platform Objects
+-- Every platform is defined by four numbers:
+--   x      - How far from the left edge of the screen (in pixels).
+--   y      - How far from the top edge of the screen (in pixels).
+--   width  - How wide the platform is (in pixels).
+--   height - How tall the platform is (in pixels).
+-- EDUCATIONAL NOTE: The coordinate system starts at (0, 0) in the top-left corner.
+-- X increases going right. Y increases going DOWN (not up like in math class).
+-- So y=570 is near the BOTTOM of the 600-pixel-tall screen.
+
+
+-- SECTION: Understanding Moving Platforms
+-- Moving platforms have the same x, y, width, height as static platforms PLUS:
+--   startX    - The leftmost x position the platform travels to.
+--   endX      - The rightmost x position the platform travels to.
+--   speed     - How fast the platform moves (pixels per frame).
+--   direction - Which way it is currently moving (1 for right, -1 for left).
+-- The platform bounces between startX and endX forever.
+-- CONDITIONAL: if platform x reaches endX then set direction to negative 1 (go left).
+-- CONDITIONAL: if platform x reaches startX then set direction to 1 (go right).
+
+
+-- SECTION: Understanding Fire Objects
+-- Fires use x, y, width, height just like platforms.
+-- The height is typically 25 pixels (the flame visual height).
+-- The y position is usually 545 (sitting on top of the ground at y=570).
+-- Fires are purely hazardous. Touching them triggers player death (unless dashing).
+
+
+-- SECTION: Understanding Coin Objects
+-- Coins only need x and y (position). Their size is always 20x20 pixels.
+-- Each coin gains a "collected" flag and a "bob" animation offset when the level loads.
+-- The bob value is a random number that offsets the floating animation,
+-- so coins don't all bob up and down in sync.
+
+
+-- SECTION: Understanding the Goal
+-- The goal has x, y, width (50), and height (60).
+-- It is rendered as a glowing neon gate.
+-- Touching it completes the level and advances to the next one.
+
+
+-- SECTION: Understanding playerStart
+-- Just an x and y position. The player is placed here when the level loads.
+-- Typically x=50, y=500 (bottom-left area, safely on the ground).
+
+
+-- ================================================================
+-- LEVEL 1: The Tutorial
+-- ================================================================
+
+-- PLATFORMS (6 static, 1 moving):
+-- Platform 1: The ground floor. Spans the entire bottom of the screen.
+--   x=0, y=570, width=800, height=30
+--   This is the main floor. Nearly every level starts with ground to stand on.
+--
+-- Platforms 2-6: Stepping stones going up and across.
+--   They zigzag from bottom-right to top-left, teaching the player to jump upward.
+--   The platforms get progressively higher: y=480, y=400, y=320, y=240, y=160.
+--
+-- Moving Platform: Near the top-right.
+--   Travels between x=600 and x=700 at speed 1.
+--   Teaches the player that some platforms move and they must time their jumps.
+--
+-- FIRES (2): Two fire patches on the ground floor.
+--   Positioned at x=200 and x=500, forcing the player to jump over them.
+--   These teach that fire is deadly on contact.
+--
+-- COINS (5): Placed near each platform as breadcrumbs guiding the path upward.
+--   y values: 450, 370, 290, 210, 130 (ascending with the platforms).
+--
+-- GOAL: Top-right corner at x=730, y=100.
+--   The player must climb all the way up to reach it.
+--
+-- PLAYER START: Bottom-left at x=50, y=500.
+
+
+-- ================================================================
+-- LEVEL 2: Gaps and Speed
+-- ================================================================
+
+-- PLATFORMS (10 static, 2 moving):
+-- The ground is now SPLIT into three sections with gaps between them.
+--   Section 1: x=0 to 200. Section 2: x=280 to 520. Section 3: x=600 to 800.
+--   The gaps force players to jump across open space (fall = death).
+--
+-- Higher platforms zigzag more aggressively with smaller surfaces.
+--   The player must navigate upward through tighter jumps.
+--
+-- MOVING PLATFORMS (2):
+--   Platform 1: Travels x=200 to x=350 at speed 1.5 (faster than Level 1).
+--   Platform 2: Travels x=350 to x=500 at speed 2 (even faster).
+--   The increasing speed teaches timing and patience.
+--
+-- FIRES (3): More fires, including one on an elevated platform (y=325).
+--   Elevated fire is new. The player learns fire can appear anywhere, not just on ground.
+--
+-- COINS (6): One more coin than Level 1.
+--
+-- GOAL: Upper area at x=550, y=80.
+--
+-- PLAYER START: x=50, y=500.
+
+
+-- ================================================================
+-- LEVEL 3: The Gauntlet
+-- ================================================================
+
+-- PLATFORMS (9 static, 3 moving):
+-- The ground is now only 150 pixels wide (x=0 to 150).
+--   Most of the floor is missing. This level is mostly aerial platforming.
+--
+-- Platforms are small (70-80 pixels wide) and climb steeply.
+--   The player must make precise jumps across small targets.
+--
+-- MOVING PLATFORMS (3):
+--   Three moving platforms at different heights, each faster than in Level 2.
+--   Speeds: 2, 2.5, and 1.5. The variety keeps the player adapting.
+--   One moving platform covers a wide range (x=250 to x=400), requiring patience.
+--
+-- FIRES (5): The most fire of any level.
+--   Four fire patches cover most of the ground floor (x=150 to x=700).
+--   One fire sits on an elevated platform at y=315.
+--   The ground is essentially a death zone. The player MUST stay on platforms.
+--
+-- COINS (7): The most coins of any level. Reward for the harder challenge.
+--
+-- GOAL: Top-left corner at x=30, y=40.
+--   The player starts bottom-left and must reach top-left,
+--   but the path goes right and up before looping back left.
+--
+-- PLAYER START: x=50, y=500.
+
+
+-- EDUCATIONAL SUMMARY:
+-- The three levels follow a classic difficulty curve:
+-- Level 1 teaches basic mechanics (jump, avoid fire, collect coins).
+-- Level 2 introduces gaps, faster platforms, and elevated hazards.
+-- Level 3 combines everything with minimal safe ground and maximum challenge.
+-- Each level reuses the same data structure but increases the difficulty
+-- through smaller platforms, more hazards, and trickier layouts.

@@ -1,0 +1,82 @@
+-- RENDERING: Painting the Night Sky Background
+-- This file handles the visual background layer: a dark gradient sky with twinkling stars.
+-- None of this affects gameplay. It is purely aesthetic.
+
+
+-- SECTION: Star State
+
+-- VARIABLE: stars
+-- TYPE: List of star objects
+-- PURPOSE: Holds all the background stars. Each star has x, y, size, and brightness.
+-- The list is created once and updated every frame to make stars twinkle.
+
+
+-- SECTION: Initializing Stars
+
+-- FUNCTION: initStars
+-- PARAMETERS: canvasWidth, canvasHeight
+-- PURPOSE: Creates 100 randomly placed stars across the entire canvas.
+-- Called once when the game starts or the canvas is resized.
+--
+-- set stars to an empty list.
+-- count to 100 and when you are done create one star:
+--   set x to a random number between 0 and the canvas width.
+--   set y to a random number between 0 and the canvas height.
+--   set size to a random number between 0.5 and 2.5 pixels.
+--   -- Small size range creates a mix of dim distant stars and brighter close ones.
+--   set brightness to a random number between 0 and 1.
+--   -- Brightness controls opacity. 0 is invisible, 1 is fully bright.
+--
+-- EDUCATIONAL NOTE: Using random values for position, size, and brightness
+-- ensures no two game sessions have identical star fields.
+-- This technique is called "procedural generation" - creating content with algorithms
+-- instead of hand-placing every element.
+
+
+-- SECTION: Updating Stars (Twinkling)
+
+-- FUNCTION: updateStars
+-- PURPOSE: Makes stars flicker slightly each frame to simulate twinkling.
+-- Called every frame during the game loop.
+--
+-- FOR EACH star in the stars list:
+--   Add a small random value between -0.05 and 0.05 to the star's brightness.
+--   -- This creates subtle random fluctuation.
+--   Clamp brightness to stay between 0.3 and 1.
+--   -- CONDITIONAL: if brightness is less than 0.3 then set brightness to 0.3.
+--   -- CONDITIONAL: if brightness is greater than 1 then set brightness to 1.
+--   -- The minimum of 0.3 ensures stars never fully disappear.
+--   -- The maximum of 1 prevents brightness from exceeding full opacity.
+--
+-- EDUCATIONAL NOTE: "Clamping" means forcing a value to stay within a range.
+-- It is used constantly in games to prevent values from going out of bounds.
+-- The formula is: value = max(minimum, min(maximum, value))
+
+
+-- SECTION: Drawing the Background
+
+-- FUNCTION: drawBackground
+-- PARAMETERS: ctx (canvas rendering context), canvasWidth, canvasHeight
+-- PURPOSE: Paints the gradient sky and all stars. Called every frame before other elements.
+--
+-- STEP 1: Create a vertical gradient (dark sky).
+--   The gradient goes from top to bottom with three color stops:
+--     0 percent (top):    "#0a0015" - Very dark purple-black (deep space).
+--     50 percent (middle): "#150520" - Slightly lighter purple (atmospheric glow).
+--     100 percent (bottom): "#1a0a10" - Dark reddish-brown (ground glow from fire below).
+--   Fill the entire canvas with this gradient.
+--   -- EDUCATIONAL NOTE: A "gradient" smoothly transitions between colors.
+--   -- The three stops create a sky that feels like a dark volcanic landscape.
+--   -- The reddish tint at the bottom hints at the fire hazards below.
+--
+-- STEP 2: Draw each star.
+--   FOR EACH star in the stars list:
+--     Set fill color to white with alpha equal to brightness times 0.8.
+--     -- Multiplying by 0.8 caps the brightest star at 80 percent opacity.
+--     -- This keeps stars subtle and prevents them from overpowering the scene.
+--     Draw a filled circle (arc) at the star's position with its size as the radius.
+--
+-- EDUCATIONAL NOTE: The background is drawn FIRST every frame.
+-- Then platforms, fire, coins, player, and UI are drawn ON TOP of it.
+-- This layering order is called the "draw order" or "z-order".
+-- If the background were drawn last, it would cover everything else.

@@ -1,0 +1,147 @@
+-- PARTICLES: Visual Effects That Make the Game Feel Alive
+-- This file manages two particle systems: general particles and fire particles.
+-- Particles are small shapes that move, shrink, and fade away over time.
+-- They add visual polish but have no effect on gameplay.
+
+
+-- SECTION: Particle State Variables
+
+-- VARIABLE: particles
+-- TYPE: List of particle objects
+-- PURPOSE: Stores all active general particles (death explosions, coin sparkles, movement dust).
+-- Each particle has: x, y, dx, dy, life, decay, size, color.
+-- The list grows when new particles spawn and shrinks as particles die.
+
+-- VARIABLE: fireParticles
+-- TYPE: List of fire particle objects
+-- PURPOSE: Stores particles that float upward from fire hazards.
+-- These are separate because they use different rendering (circles vs squares)
+-- and different physics (no gravity, circular shape).
+
+
+-- SECTION: Spawning Particles
+
+-- FUNCTION: spawnParticle
+-- PARAMETERS: x (position), y (position), type (what kind of event triggered this)
+-- PURPOSE: Creates a burst of particles at a location. Used for deaths, coin pickups, and movement.
+--
+-- CONDITIONAL: if type is "death" then set count to 20.
+-- CONDITIONAL: if type is "coin" then set count to 8.
+-- Otherwise set count to 3.
+-- EDUCATIONAL NOTE: Death creates the most particles (big explosion),
+-- coins create a medium burst (satisfying feedback), and movement creates few (subtle dust).
+--
+-- count to the particle count and when you are done create one particle:
+--   For each particle, randomize its properties:
+--
+--   set x to the spawn position x.
+--   set y to the spawn position y.
+--
+--   set dx to a random number between -0.5 and 0.5.
+--   -- CONDITIONAL: if type is "death" then multiply range by 10 (spread = -5 to 5).
+--   -- Otherwise multiply range by 4 (spread = -2 to 2).
+--   -- Death particles fly outward faster and farther.
+--
+--   set dy to a random number between -0.5 and 0.5, minus 2.
+--   -- The "minus 2" bias makes particles tend to float upward initially.
+--   -- CONDITIONAL: if death then multiply by 10 for explosive spread.
+--
+--   set life to 1.
+--   -- Life starts at 1 (fully alive) and decreases toward 0 (dead).
+--   -- This value is also used as the particle's opacity (transparency).
+--
+--   set decay to a random number between 0.02 and 0.04.
+--   -- Each frame, life decreases by this amount. Random decay means
+--   -- particles disappear at slightly different times, looking more natural.
+--
+--   set size to a random number.
+--   -- CONDITIONAL: if death then 4 to 8 pixels. Otherwise 3 to 5 pixels.
+--
+--   set color based on type.
+--   -- CONDITIONAL: if death then "#ff4400" (orange-red, like fire).
+--   -- CONDITIONAL: if coin then "#ffcc00" (gold, like coins).
+--   -- Otherwise "#00ffcc" (cyan, like the player's trail).
+
+
+-- SECTION: Updating Fire Particles
+
+-- FUNCTION: updateFireParticles
+-- PARAMETERS: fires (the list of fire hazards)
+-- PURPOSE: Creates new fire particles and updates existing ones each frame.
+--
+-- FOR EACH fire hazard in the fires list:
+--   CONDITIONAL: if a random number is less than 0.4 (40 percent chance per frame) then
+--     Create a new fire particle:
+--       set x to a random position within the fire's width.
+--       set y to the top of the fire.
+--       set dy to negative 1 to negative 3 (floats upward).
+--       set dx to a tiny random horizontal drift.
+--       set life to 1.
+--       set size to 3 to 8 pixels.
+--   -- This creates a flickering, dynamic fire effect.
+--   -- Not every fire spawns a particle every frame (40 percent chance), which adds randomness.
+--
+-- THEN update all existing fire particles:
+-- Loop BACKWARD through the fire particles list:
+--   -- EDUCATIONAL NOTE: We loop backward because we might remove items.
+--   -- Removing from the end of a list is safe during backward iteration.
+--   -- Removing during forward iteration would skip elements.
+--
+--   Move the particle: add dy to y, add dx to x.
+--   Reduce life by 0.03 each frame.
+--   Shrink size by multiplying by 0.97 (3 percent smaller each frame).
+--
+--   CONDITIONAL: if life is less than or equal to 0 then remove this particle.
+--   -- REMOVAL TRICK: Instead of expensive array splice, swap with the last element and pop.
+--   -- This is an O(1) removal technique (instant) vs O(n) splice (slow for large lists).
+--   -- The swap-and-pop works because particle order does not matter for rendering.
+
+
+-- SECTION: Updating General Particles
+
+-- FUNCTION: updateParticles
+-- PURPOSE: Moves and ages all general particles each frame.
+--
+-- Loop BACKWARD through the particles list:
+--   Move: add dx to x, add dy to y.
+--   Apply gravity: add 0.2 to dy.
+--   -- Unlike fire particles, general particles fall downward due to gravity.
+--   -- This makes death explosions arc naturally like debris.
+--   Reduce life by the particle's decay rate.
+--
+--   CONDITIONAL: if life is 0 or below then remove using swap-and-pop.
+
+
+-- SECTION: Drawing Particles
+
+-- FUNCTION: drawParticles
+-- PARAMETERS: ctx (the canvas rendering context)
+-- PURPOSE: Renders all general particles as colored squares.
+-- FOR EACH particle:
+--   Set fill color to the particle's color.
+--   Set global alpha (transparency) to the particle's life value.
+--   -- As life goes from 1 to 0, the particle fades from fully visible to invisible.
+--   Draw a filled rectangle centered on the particle's position.
+-- After drawing all particles, reset global alpha to 1 (fully opaque).
+-- EDUCATIONAL NOTE: Forgetting to reset globalAlpha would make everything else transparent too.
+
+-- FUNCTION: drawFireParticles
+-- PARAMETERS: ctx (the canvas rendering context)
+-- PURPOSE: Renders fire particles as glowing orange circles.
+-- FOR EACH fire particle:
+--   Set fill color using rgba with the life value controlling both green channel and alpha.
+--   -- rgba(255, 100 + life*100, 0, life) creates colors ranging from
+--   -- bright yellow-orange (alive) to dim red-orange (dying).
+--   Draw a circle using arc at the particle's position with its current size as radius.
+-- EDUCATIONAL NOTE: Fire particles use circles (arc) while general particles use squares (fillRect).
+-- This visual difference makes fire effects look softer and more organic.
+
+
+-- SECTION: Cleanup
+
+-- FUNCTION: clearParticles
+-- PURPOSE: Removes ALL particles from both systems.
+-- Sets the particles list to an empty list.
+-- Sets the fireParticles list to an empty list.
+-- Called when loading a new level or restarting the game.
+-- This prevents particles from the previous level lingering in the new one.

@@ -1,0 +1,141 @@
+-- CONSTANTS: The Fixed Rules of the Game World
+-- This file defines every numeric value that controls how the game feels.
+-- None of these change during gameplay. They are the "laws of physics" for Inferno Run.
+
+
+-- SECTION: Physics Constants
+-- These variables control how the player moves through the world.
+
+set the gravity to 0.
+-- EXPLANATION: Gravity is 0.6. Every frame, the player's downward speed increases by this amount.
+-- A higher number makes the player fall faster. A lower number makes the game feel floaty.
+-- This is added to the player's vertical velocity each frame, pulling them downward.
+add 1 to the gravity.
+-- In JavaScript: const GRAVITY = 0.6
+
+set the jump_force to 0.
+subtract 13 from the jump_force.
+-- EXPLANATION: Jump force is negative 13. When the player jumps, their vertical velocity is set to this.
+-- Negative means "upward" because the screen's Y axis goes downward (0 is the top).
+-- A more negative number means a higher jump. This value fights against gravity.
+
+set the speed to 4.
+-- EXPLANATION: The base movement speed. This controls how fast the player walks left and right.
+
+set the max_speed to 6.
+-- EXPLANATION: The maximum horizontal speed the player can reach.
+-- Even if you hold the move key forever, the player will never go faster than 6 pixels per frame.
+-- This prevents the player from accelerating infinitely. It acts as a speed limit.
+
+set the friction to 1.
+-- EXPLANATION: Friction is 0.85. Each frame, horizontal speed is multiplied by this number.
+-- Since 0.85 is less than 1, the player gradually slows down when you stop pressing movement keys.
+-- A value of 1 would mean no friction (sliding forever). A value of 0 would mean instant stop.
+
+set the coyote_time to 100.
+-- EXPLANATION: Coyote time is 100 milliseconds. This is a game-feel mechanic.
+-- After the player walks off a ledge, they can still jump for 100ms.
+-- Named after Wile E. Coyote who runs off cliffs and floats briefly before falling.
+-- This makes the game feel more forgiving and responsive.
+
+set the jump_buffer to 100.
+-- EXPLANATION: Jump buffer is 100 milliseconds. Another game-feel mechanic.
+-- If the player presses jump slightly BEFORE landing, the game remembers the press.
+-- When they land within 100ms, the jump still happens. This prevents missed jumps.
+
+
+-- SECTION: Air Control
+-- These variables control how different movement feels in the air vs on the ground.
+
+set the ground_acceleration to 1.
+-- EXPLANATION: Ground acceleration is 0.5. When on the ground, pressing a direction
+-- adds 0.5 to the player's horizontal speed each frame. This gives snappy ground control.
+
+set the air_acceleration to 0.
+-- EXPLANATION: Air acceleration is 0.25. When airborne, pressing a direction
+-- only adds 0.25 per frame. This is HALF the ground value.
+-- This means the player has less control in the air, which feels more realistic.
+
+set the air_friction to 1.
+-- EXPLANATION: Air friction is 0.95. In the air, the player retains more momentum.
+-- Compare to ground friction of 0.85. The player slides more in the air.
+-- This creates a difference between tight ground movement and floaty air movement.
+
+
+-- SECTION: Dash Ability
+-- The dash is a burst of speed that makes the player temporarily invincible.
+
+set the dash_speed to 15.
+-- EXPLANATION: During a dash, the player moves at 15 pixels per frame.
+-- Compare to max_speed of 6. The dash is 2.5 times faster than normal movement.
+-- This burst of speed lets players dodge through fire hazards.
+
+set the dash_duration to 150.
+-- EXPLANATION: The dash lasts 150 milliseconds (about 1/7 of a second).
+-- During this time, the player moves at dash_speed and cannot be hurt by fire.
+-- Short enough to require skill, long enough to be useful.
+
+set the dash_cooldown to 500.
+-- EXPLANATION: After dashing, the player must wait 500 milliseconds (half a second)
+-- before dashing again. This prevents spam-dashing through every obstacle.
+-- The cooldown creates a risk/reward decision: when should I use my dash?
+
+
+-- SECTION: Wall Jump and Wall Slide
+-- These variables control interactions with vertical surfaces (walls).
+
+set the wall_slide_speed to 2.
+-- EXPLANATION: When sliding down a wall, the player falls at only 2 pixels per frame.
+-- Compare to normal falling with gravity (which accelerates). Wall sliding is much slower.
+-- This gives the player time to wall-jump before falling too far.
+
+set the wall_jump_force_x to 8.
+-- EXPLANATION: When wall-jumping, the player is pushed horizontally at 8 pixels per frame.
+-- This pushes them AWAY from the wall they jumped off of.
+-- Without this force, the player would jump straight up along the wall.
+
+set the wall_jump_force_y to 0.
+subtract 12 from the wall_jump_force_y.
+-- EXPLANATION: Wall jump vertical force is negative 12.
+-- Slightly weaker than a normal jump (negative 13).
+-- Combined with the horizontal push, this creates a diagonal leap off the wall.
+
+set the wall_cling_time to 150.
+-- EXPLANATION: When first touching a wall, the player "sticks" for 150 milliseconds.
+-- This brief pause gives the player time to react and press jump.
+-- Without it, the player would immediately start sliding and might miss the jump window.
+
+
+-- SECTION: Gamepad Support
+-- These variables handle game controller input.
+
+set the gamepad_deadzone to 0.
+-- EXPLANATION: The deadzone is 0.15. Analog sticks on controllers are rarely perfectly centered.
+-- They might report tiny values like 0.02 even when untouched. The deadzone ignores
+-- any stick input below 0.15 (15 percent), preventing unwanted drift.
+
+set the gamepad_move_threshold to 1.
+-- EXPLANATION: The move threshold is 0.5. The player only starts moving when the stick
+-- is pushed past 50 percent of its range. This prevents accidental movement.
+
+
+-- SECTION: Input Smoothing
+-- This variable prevents jittery movement from rapid key presses.
+
+set the input_smoothing to 0.
+-- EXPLANATION: Input smoothing is 0.3. Instead of instantly changing direction,
+-- the input gradually transitions from one value to another.
+-- This is done using "linear interpolation" (lerp). Each frame, the input moves
+-- 30 percent closer to the target value. This creates smooth, natural-feeling movement.
+
+
+-- SECTION: Canvas Dimensions
+-- These define the game window size in pixels.
+
+set the canvas_width to 800.
+-- EXPLANATION: The game screen is 800 pixels wide.
+
+set the canvas_height to 600.
+-- EXPLANATION: The game screen is 600 pixels tall.
+-- Together, 800 by 600 defines the playing field where all gameplay happens.
+-- All platform positions, fire positions, and goal positions are relative to this space.

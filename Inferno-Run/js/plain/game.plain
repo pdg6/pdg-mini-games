@@ -1,0 +1,385 @@
+-- GAME: The Main Game Loop and Core Logic
+-- This is the heart of Inferno Run. It wires together the game engine, player physics,
+-- level loading, collision detection, rendering, and game state management.
+-- Every frame, this file runs: update the world, check collisions, draw everything.
+
+
+-- SECTION: Engine Initialization
+
+-- VARIABLE: engine
+-- TYPE: Engine object (from the shared game engine library)
+-- PURPOSE: Provides the game loop, input handling, particle system, screen shake, and overlays.
+-- The engine handles the repeating "update then draw" cycle at 60 frames per second.
+-- set engine to a new Engine using the "gameCanvas" HTML canvas element.
+-- set the engine game name to "Inferno-Run".
+
+
+-- SECTION: Game State Variables
+
+-- VARIABLE: currentLevel
+-- TYPE: Number
+-- PURPOSE: Tracks which level the player is on. Starts at 1.
+-- Increases by 1 when the player reaches the goal.
+set the currentLevel to 1.
+
+-- VARIABLE: coinsCollected
+-- TYPE: Number
+-- PURPOSE: Tracks the total score across levels. Persists between levels.
+set the coinsCollected to 0.
+
+-- VARIABLE: lives
+-- TYPE: Number
+-- PURPOSE: How many times the player can die before game over. Starts at 3.
+-- Decreases by 1 each death. When it reaches 0, the game ends.
+set the lives to 3.
+
+
+-- SECTION: Entity Lists
+-- These lists hold all the objects in the current level.
+-- They are rebuilt each time a level loads.
+
+-- VARIABLE: platforms
+-- TYPE: List of platform objects
+-- PURPOSE: All static platforms the player can stand on.
+
+-- VARIABLE: movingPlatforms
+-- TYPE: List of moving platform objects
+-- PURPOSE: Platforms that slide back and forth between two positions.
+
+-- VARIABLE: fires
+-- TYPE: List of fire hazard objects
+-- PURPOSE: Deadly obstacles the player must avoid or dash through.
+
+-- VARIABLE: coins
+-- TYPE: List of coin objects
+-- PURPOSE: Collectibles that increase the player's score by 100 each.
+
+-- VARIABLE: goal
+-- TYPE: Object with x, y, width, height
+-- PURPOSE: The exit gate. Touching it completes the level.
+
+
+-- SECTION: Player Object
+
+-- VARIABLE: player
+-- TYPE: Object with many properties
+-- PURPOSE: The player character's complete state.
+--   x, y         - Position on screen (pixels).
+--   width, height - Size of the player (28 by 32 pixels).
+--   vx, vy       - Velocity: how fast the player is moving horizontally and vertically.
+--   grounded     - Boolean: is the player standing on a surface?
+--   jumping      - Boolean: is the player currently in a jump?
+--   facing       - 1 for right, -1 for left. Controls which way the player sprite faces.
+--   trail        - List of trail points left behind during dashes.
+--   isDashing    - Boolean: is the player currently performing a dash?
+--   dashTime     - Timestamp of when the current dash started.
+--   lastDashTime - Timestamp of when the last dash was used (for cooldown).
+--   touchingWall - 0 (no wall), 1 (wall to right), -1 (wall to left).
+--   dashDirection - Which way the dash moves (1 for right, -1 for left).
+
+
+-- SECTION: Physics Constants (Local Copies)
+
+set the GRAVITY to 1.
+-- EXPLANATION: 0.6. Added to vertical velocity every frame. Pulls player downward.
+set the JUMP_FORCE to 0.
+subtract 13 from the JUMP_FORCE.
+-- EXPLANATION: -13. Set as vertical velocity when jumping. Launches player upward.
+set the MAX_SPEED to 6.
+-- EXPLANATION: Horizontal speed cap. Player cannot move faster than this.
+set the ACCEL to 1.
+-- EXPLANATION: 0.5. Added to horizontal velocity each frame when a direction is held.
+set the FRICTION to 1.
+-- EXPLANATION: 0.85. Horizontal velocity is multiplied by this when no direction is held.
+set the DASH_SPEED to 15.
+-- EXPLANATION: Horizontal speed during a dash. Much faster than normal movement.
+set the DASH_DURATION to 150.
+-- EXPLANATION: How long a dash lasts in milliseconds.
+set the DASH_COOLDOWN to 500.
+-- EXPLANATION: Minimum time between dashes in milliseconds.
+
+
+-- SECTION: Setup Function
+
+-- FUNCTION: setup
+-- PURPOSE: Called once when the game starts. Loads the first level.
+-- set currentLevel to 1 then load level 1.
+-- set the engine score to coinsCollected.
+
+
+-- SECTION: Level Loading
+
+-- FUNCTION: loadLevel
+-- PARAMETERS: num (the level number to load)
+-- PURPOSE: Reads level data and initializes all entities for that level.
+--
+-- STEP 1: Get the level data from the levels list.
+--   The index is (num - 1) modulo the number of levels.
+--   -- EDUCATIONAL NOTE: "Modulo" gives the remainder after division.
+--   -- This means if currentLevel is 4 and there are 3 levels, it wraps to level 1.
+--   -- This allows infinite play by cycling through levels.
+--
+-- STEP 2: Deep copy the platform, moving platform, and fire data.
+--   -- EDUCATIONAL NOTE: "Deep copy" means creating completely independent duplicates.
+--   -- The technique used is JSON.parse(JSON.stringify(data)).
+--   -- This converts the data to a text string and back, breaking all references.
+--   -- Without deep copying, modifying a moving platform's position would corrupt
+--   -- the original level data, making it impossible to replay the level correctly.
+--
+-- STEP 3: Create coins with extra properties.
+--   Each coin gets: a "collected" flag (false) and a "bob" animation offset (random).
+--
+-- STEP 4: Copy the goal position.
+--
+-- STEP 5: Reset the player.
+--   set player x to the level's start x.
+--   set player y to the level's start y.
+--   set player vx to 0.
+--   set player vy to 0.
+--   set player trail to an empty list.
+--   set player isDashing to false.
+
+
+-- SECTION: Update Function (Runs Every Frame)
+
+-- FUNCTION: update
+-- PARAMETERS: dt (delta time, milliseconds since last frame)
+-- PURPOSE: Updates all game logic: player physics, entity movement, collisions.
+-- CONDITIONAL: if engine state is not "PLAY" then skip everything and return.
+-- This pauses all game logic on menus and game-over screens.
+
+-- SUBSECTION: Dash Logic
+--   set canDash to whether enough time has passed since the last dash.
+--   -- CONDITIONAL: if (current time minus lastDashTime) is greater than DASH_COOLDOWN
+--   --   then the player can dash again.
+--   CONDITIONAL: if the player just pressed ShiftLeft AND canDash AND not already dashing then
+--     set isDashing to true.
+--     set dashTime to the current time.
+--     set lastDashTime to the current time.
+--     set dashDirection to whichever way the player is facing.
+--     set vertical velocity to 0 (dash is horizontal only).
+--     play the "dash" sound effect.
+--     spawn 8 spark particles at the player's center.
+--
+--   CONDITIONAL: if the player is currently dashing then
+--     CONDITIONAL: if the dash has lasted less than DASH_DURATION milliseconds then
+--       set horizontal velocity to DASH_SPEED times dashDirection.
+--       set vertical velocity to 0 (freeze in the air during dash).
+--       add a trail point at the player's center with life of 1.
+--     Otherwise (dash expired):
+--       set isDashing to false.
+
+-- SUBSECTION: Normal Movement (when NOT dashing)
+--   set inputX to 0.
+--   if left arrow or A key is held then subtract 1 from inputX.
+--   if right arrow or D key is held then add 1 to inputX.
+--
+--   CONDITIONAL: if inputX is not 0 then
+--     add (inputX times ACCEL) to the player's horizontal velocity.
+--     set facing to inputX (track which direction the player faces).
+--   Otherwise:
+--     multiply horizontal velocity by FRICTION (slow down when no input).
+--
+--   Clamp horizontal velocity between negative MAX_SPEED and MAX_SPEED.
+--   -- This prevents the player from exceeding the speed limit.
+
+-- SUBSECTION: Jumping
+--   CONDITIONAL: if the player is grounded AND just pressed Space or Up or W then
+--     set vertical velocity to JUMP_FORCE (launch upward).
+--     set grounded to false.
+--     play the "jump" sound effect.
+--     spawn 5 spark particles at the player's feet.
+
+-- SUBSECTION: Gravity
+--   add GRAVITY to vertical velocity each frame.
+--   -- This constantly pulls the player downward, creating the arc of a jump.
+
+-- SUBSECTION: Movement and Collision Resolution
+--   STEP 1: Move the player horizontally.
+--     add horizontal velocity to x.
+--   STEP 2: Check for horizontal collisions with platforms.
+--     If the player overlaps a platform horizontally, push them out.
+--   STEP 3: Move the player vertically.
+--     add vertical velocity to y.
+--   STEP 4: Check for vertical collisions with platforms.
+--     If the player lands on a platform, stop falling and set grounded to true.
+
+-- SUBSECTION: Moving Platform Updates
+--   FOR EACH moving platform:
+--     add (speed times direction) to the platform's x position.
+--     CONDITIONAL: if x reaches endX then set direction to negative 1 (reverse).
+--     CONDITIONAL: if x reaches startX then set direction to 1 (reverse).
+--     -- The platform bounces back and forth endlessly.
+
+-- SUBSECTION: Trigger Collisions
+--   Check for fire collisions: if touching fire and not dashing then kill the player.
+--   Check for coin collisions: if touching an uncollected coin then collect it.
+--     add 100 to the engine score.
+--     play the "coin" sound.
+--     spawn 10 sparkle particles.
+
+-- SUBSECTION: Goal Check
+--   CONDITIONAL: if the player rectangle overlaps the goal rectangle then win the level.
+
+-- SUBSECTION: Boundary Check
+--   CONDITIONAL: if the player's y is greater than the screen height then kill the player.
+--   -- Falling off the bottom of the screen is instant death.
+
+-- SUBSECTION: Trail Cleanup
+--   FOR EACH trail point: subtract 0.05 from its life.
+--   Remove all trail points where life is 0 or below.
+
+
+-- SECTION: Draw Function (Runs Every Frame After Update)
+
+-- FUNCTION: draw
+-- PURPOSE: Renders everything visible on screen. Called after update.
+--
+-- STEP 1: Clear the screen with a dark background color "#050510".
+--
+-- STEP 2: Draw the goal gate with a neon glow effect.
+--   Use shadowBlur and shadowColor to create the glowing outline.
+--   -- EDUCATIONAL NOTE: Canvas "shadow" properties can create glow effects.
+--   -- Setting shadowBlur to 15 and shadowColor to the accent color makes
+--   -- the stroke appear to emit light.
+--
+-- STEP 3: Draw all level entities (platforms, fires, coins) via drawLevelEntities.
+--
+-- STEP 4: Draw the dash trail.
+--   FOR EACH trail point:
+--     Set fill color to cyan with opacity based on the trail point's remaining life.
+--     Draw a circle that shrinks as life decreases (radius = 10 times life).
+--
+-- STEP 5: Draw the player character using the shared Assets renderer.
+--
+-- STEP 6: Draw engine particles (sparks from jumps, dashes, deaths).
+--
+-- STEP 7: Draw the UI overlay.
+
+
+-- SECTION: UI Drawing
+
+-- FUNCTION: drawUI
+-- PURPOSE: Draws the heads-up display: level number, score, lives, and screen overlays.
+--
+-- Display "LEVEL: " followed by currentLevel.
+-- Display "SCORE: " followed by the engine score.
+-- Display heart symbols for remaining lives.
+--   count to lives and when you are done add one heart character.
+--
+-- CONDITIONAL: if engine state is "MENU" then
+--   Draw an overlay with title "INFERNO RUN", subtitle, and "PRESS SPACE TO START".
+-- CONDITIONAL: if engine state is "GAMEOVER" then
+--   Draw an overlay with "GAME OVER", the final score, and "PRESS SPACE TO RESTART".
+
+
+-- SECTION: Collision Helper Functions
+
+-- FUNCTION: checkXCollisions
+-- PURPOSE: Resolves horizontal overlaps between the player and platforms.
+-- FOR EACH platform in both static and moving platform lists:
+--   CONDITIONAL: if the player overlaps this platform then
+--     CONDITIONAL: if player is moving right then push player left to platform's left edge.
+--     CONDITIONAL: if player is moving left then push player right to platform's right edge.
+--     set horizontal velocity to 0 (stop horizontal movement).
+
+-- FUNCTION: checkYCollisions
+-- PURPOSE: Resolves vertical overlaps between the player and platforms.
+-- set grounded to false (assume not grounded until proven otherwise).
+-- FOR EACH platform in both static and moving platform lists:
+--   CONDITIONAL: if the player overlaps this platform then
+--     CONDITIONAL: if player is falling down then
+--       set player y to platform top minus player height (land on top).
+--       set grounded to true.
+--       set vertical velocity to 0.
+--       if this is a moving platform then move the player with it.
+--     CONDITIONAL: if player is moving up then
+--       set player y to platform bottom (bonk head on underside).
+--       set vertical velocity to 0.
+
+-- FUNCTION: checkTriggers
+-- PURPOSE: Checks fire and coin collisions separately from platforms.
+-- FOR EACH fire:
+--   CONDITIONAL: if the player overlaps the fire (with a small inset for forgiveness) then
+--     CONDITIONAL: if the player is NOT dashing then kill the player.
+--     -- Dashing grants invincibility through fire. This is a core mechanic.
+-- FOR EACH coin:
+--   CONDITIONAL: if the coin is not collected AND player overlaps it then
+--     set collected to true.
+--     add 100 to the score.
+--     play coin sound.
+--     spawn 10 sparkle particles.
+
+
+-- SECTION: Death and Victory
+
+-- FUNCTION: killPlayer
+-- PURPOSE: Handles player death.
+-- subtract 1 from lives.
+-- Trigger screen shake (15 intensity).
+-- Play death sound.
+-- Spawn 20 red spark particles (death explosion).
+--
+-- CONDITIONAL: if lives is 0 or below then
+--   set engine state to "GAMEOVER".
+--   Reset: set lives to 3, currentLevel to 1, coinsCollected to 0.
+-- Otherwise:
+--   Reload the current level (player respawns with remaining lives).
+
+-- FUNCTION: winLevel
+-- PURPOSE: Handles reaching the goal gate.
+-- Play the level-up sound.
+-- Save the current score.
+-- add 1 to currentLevel.
+-- CONDITIONAL: if currentLevel is greater than the number of levels then
+--   set engine state to "GAMEOVER" (victory screen).
+--   -- The game treats completing all levels as a win condition.
+-- Otherwise:
+--   Load the next level.
+
+
+-- SECTION: Utility Functions
+
+-- FUNCTION: rectIntersect
+-- PARAMETERS: x1, y1, w1, h1, x2, y2, w2, h2
+-- PURPOSE: Checks if two rectangles overlap. Returns true or false.
+-- This is the AABB (Axis-Aligned Bounding Box) test used throughout the game.
+-- CONDITIONAL: if rect2 left is less than rect1 right
+--   AND rect2 right is greater than rect1 left
+--   AND rect2 top is less than rect1 bottom
+--   AND rect2 bottom is greater than rect1 top
+--   then the rectangles overlap (return true).
+-- Otherwise they do not overlap (return false).
+
+
+-- SECTION: Entity Rendering
+
+-- FUNCTION: drawLevelEntities
+-- PURPOSE: Draws all platforms, fires, and coins with visual styling.
+--
+-- PLATFORMS: Drawn as dark rectangles with subtle borders and a neon top edge.
+--   The top edge is a 2-pixel-tall colored strip that makes platforms visible in the dark.
+--   This cyberpunk-style glow matches the game's visual theme.
+--
+-- FIRES: Drawn as animated triangular flames.
+--   Three overlapping triangles with heights that oscillate using the sine function.
+--   -- EDUCATIONAL NOTE: Math.sin(time + offset) creates a smooth wave.
+--   -- Using different offsets for each triangle makes them flicker independently.
+--   -- The shadowBlur effect adds a warm glow around the flames.
+--
+-- COINS: Drawn as glowing circles that bob up and down.
+--   The bobbing uses: Math.sin(time * 0.005 + coin.bob) * 5
+--   -- This creates a 5-pixel vertical oscillation.
+--   -- Each coin has a different "bob" offset so they move out of sync.
+--   CONDITIONAL: if the coin is collected then skip drawing it.
+
+
+-- SECTION: Game Kickoff
+
+-- The final line starts the game:
+-- engine.start(setup, update, draw)
+-- This tells the engine to:
+--   1. Call setup once to initialize.
+--   2. Call update every frame to process logic.
+--   3. Call draw every frame to render visuals.
+-- The engine handles the timing, creating a smooth 60fps game loop.

@@ -1,0 +1,210 @@
+-- INPUT: How the Game Listens to the Player
+-- This file handles ALL player input: keyboard, gamepad, and touchscreen.
+-- It translates physical button presses into game actions like "move left" or "jump".
+
+
+-- SECTION: Input State Variables
+-- These variables track what the player is currently pressing.
+
+-- VARIABLE: keys
+-- TYPE: List (JavaScript object used as a dictionary)
+-- PURPOSE: Tracks every keyboard key. Each key code maps to true (pressed) or false (released).
+-- EXAMPLE: When the player holds the spacebar, keys["Space"] is set to true.
+-- When they release it, keys["Space"] is set to false.
+-- This lets the game check any key's state at any time during the game loop.
+
+-- VARIABLE: smoothedInput
+-- TYPE: Object with x and y numbers
+-- PURPOSE: Stores the smoothed directional input. Instead of snapping instantly
+-- from 0 to 1 when a key is pressed, the x value gradually approaches the target.
+-- This prevents jerky movement when rapidly tapping direction keys.
+-- The smoothing formula is: smoothedInput.x += (rawX - smoothedInput.x) * 0.3
+
+-- VARIABLE: gamepadIndex
+-- TYPE: Number or null
+-- PURPOSE: Stores which gamepad is connected (0, 1, 2, etc.) or null if none.
+-- Gamepads are identified by index because multiple controllers can be connected.
+
+-- VARIABLE: touchControls
+-- TYPE: Object with four booleans: left, right, jump, dash
+-- PURPOSE: Tracks which on-screen touch buttons are being pressed on mobile devices.
+-- Each starts as false and becomes true when the corresponding button is touched.
+
+
+-- SECTION: Key Bindings
+-- These define which keyboard keys trigger which game actions.
+
+-- VARIABLE: keyBindings
+-- TYPE: Object mapping action names to lists of key codes
+-- PURPOSE: Maps each game action to multiple possible keys. This allows rebinding.
+-- DEFAULT BINDINGS:
+--   moveLeft  maps to ArrowLeft and KeyA
+--   moveRight maps to ArrowRight and KeyD
+--   jump      maps to Space, ArrowUp, and KeyW
+--   dash      maps to ShiftLeft, ShiftRight, and KeyE
+-- EDUCATIONAL NOTE: Having multiple keys per action (like WASD and Arrow keys)
+-- lets different players use their preferred control scheme.
+
+
+-- SECTION: Key Binding Functions
+
+-- FUNCTION: loadKeyBindings
+-- PURPOSE: Loads saved key bindings from the browser's localStorage.
+-- HOW IT WORKS:
+--   Step 1: Check if "infernoRunKeyBindings" exists in localStorage.
+--   Step 2: If it exists, parse the JSON string back into an object.
+--   Step 3: Replace the default keyBindings with the saved ones.
+-- CONDITIONAL: if saved bindings exist in storage then load them.
+-- ERROR HANDLING: If the saved data is corrupted (bad JSON), it catches the error
+-- and keeps using the default bindings. This is a "try-catch" block.
+
+-- FUNCTION: saveKeyBindings
+-- PURPOSE: Saves the current key bindings to localStorage as a JSON string.
+-- This persists across browser sessions so the player's custom bindings survive page reloads.
+
+-- FUNCTION: rebindKey
+-- PARAMETERS: action (which action to rebind), newKey (the new key code), slot (which binding to replace)
+-- PURPOSE: Changes one of the keys bound to an action.
+-- EXAMPLE: rebindKey("jump", "KeyJ", 0) would make J the primary jump key.
+-- CONDITIONAL: if the action exists in keyBindings then update the key at the given slot.
+
+-- FUNCTION: isActionPressed
+-- PARAMETERS: action (the action name to check)
+-- PURPOSE: Checks if ANY of the keys bound to an action are currently pressed.
+-- HOW IT WORKS: Looks up all keys for the action, then checks if any are true in the keys list.
+-- RETURNS: true if at least one bound key is pressed, false otherwise.
+-- LIST OPERATION: Uses "some" which iterates through the bindings list and returns true
+-- as soon as it finds one that matches. This is an efficient short-circuit search.
+
+
+-- SECTION: Keyboard Event Handlers
+
+-- FUNCTION: initInput
+-- PURPOSE: Sets up all input listeners when the game starts. Called once at startup.
+-- ACTIONS:
+--   1. Loads saved key bindings from storage.
+--   2. Listens for keydown events (key pressed).
+--   3. Listens for keyup events (key released).
+--   4. Listens for gamepad connection events.
+--   5. Listens for gamepad disconnection events.
+--   6. Creates touch controls if on a touchscreen device.
+
+-- FUNCTION: handleKeyDown
+-- PARAMETERS: event (the browser keyboard event)
+-- PURPOSE: Called every time a key is pressed down.
+-- STEP 1: If the key is Space or an Arrow key, prevent the browser's default behavior.
+--   This stops the page from scrolling when playing the game.
+-- CONDITIONAL: if the key code is Space or starts with "Arrow" then prevent default.
+-- STEP 2: Mark the key as pressed in the keys dictionary.
+--   set keys[event.code] to true.
+-- STEP 3: If the game defines an onKeyDown callback function, call it.
+--   This lets other parts of the game react to specific key presses (like starting the game).
+-- CONDITIONAL: if onKeyDown function exists then call it with the key code.
+-- STEP 4: If the jump action was pressed during gameplay, record the time.
+--   This is the "jump buffer" mechanic. The timestamp is saved so the game can check
+--   "did the player press jump within the last 100ms?" when they land.
+-- STEP 5: If the dash action was pressed during gameplay, record the dash buffer time.
+
+-- FUNCTION: handleKeyUp
+-- PARAMETERS: event (the browser keyboard event)
+-- PURPOSE: Called when a key is released. Simply marks the key as not pressed.
+-- set keys[event.code] to false.
+
+
+-- SECTION: Gamepad Support
+
+-- FUNCTION: handleGamepadConnected
+-- PURPOSE: Called automatically when a game controller is plugged in or turned on.
+-- Stores the gamepad's index number so we can read its input later.
+
+-- FUNCTION: handleGamepadDisconnected
+-- PURPOSE: Called when a controller is disconnected. Clears the stored gamepad index.
+-- CONDITIONAL: if the disconnected gamepad matches our stored one then set gamepadIndex to null.
+
+-- FUNCTION: applyDeadzone
+-- PARAMETERS: value (the raw analog stick value from -1 to 1)
+-- PURPOSE: Filters out tiny accidental stick movements.
+-- HOW IT WORKS:
+--   CONDITIONAL: if the absolute value is less than the deadzone (0.15) then return 0.
+--   Otherwise, rescale the remaining range (0.15 to 1.0) back to (0 to 1.0).
+--   This ensures that once you pass the deadzone, movement starts smoothly from 0,
+--   not from 0.15. Without rescaling, there would be a sudden "jump" in input.
+-- MATH: result = sign * (absoluteValue - deadzone) / (1 - deadzone)
+
+-- FUNCTION: pollGamepad
+-- PURPOSE: Reads the current state of the connected gamepad.
+-- RETURNS: An object with moveX, moveY, jump, dash, start, dpadLeft, dpadRight, dpadUp
+-- CONDITIONAL: if no gamepad is connected then return null.
+-- HOW IT WORKS:
+--   1. Gets the gamepad from the browser's gamepad API.
+--   2. Reads axis 0 (left stick horizontal) and axis 1 (left stick vertical).
+--   3. Applies deadzone filtering to each axis.
+--   4. Reads button states:
+--      Button 0 or 1 (A/B) triggers jump.
+--      Button 2, 4, or 5 (X or shoulders) triggers dash.
+--      Button 9 (Start) triggers start.
+--      Buttons 12-15 are the D-pad (up, down, left, right).
+--   5. D-pad overrides stick input. If D-pad left is pressed, moveX becomes -1.
+--   CONDITIONAL: if dpad left is pressed then set moveX to negative 1.
+--   CONDITIONAL: if dpad right is pressed then set moveX to 1.
+
+
+-- SECTION: Touch Controls (Mobile)
+
+-- FUNCTION: initTouchControls
+-- PURPOSE: Creates on-screen buttons for mobile/tablet players.
+-- CONDITIONAL: if the device does NOT support touch events then do nothing and return.
+-- This check prevents touch buttons from appearing on desktop computers.
+
+-- FUNCTION: createTouchUI
+-- PURPOSE: Builds the HTML elements for touch controls.
+-- CREATES: A left-side panel with LEFT and RIGHT arrow buttons.
+-- CREATES: A right-side panel with DASH (small) and JUMP (large) buttons.
+-- These are real HTML buttons layered on top of the game canvas.
+
+-- FUNCTION: setupTouchButton
+-- PARAMETERS: id (the HTML element ID), action (which game action it maps to)
+-- PURPOSE: Connects a touch button to a game action.
+-- EVENTS:
+--   touchstart: When finger touches the button, mark the action as active.
+--     CONDITIONAL: if action is jump and game is playing then set jump buffer time.
+--     CONDITIONAL: if action is dash and game is playing then set dash buffer time.
+--     CONDITIONAL: if action is jump and game is at start screen then trigger game start.
+--   touchend: When finger lifts, mark the action as inactive.
+--   touchcancel: If the touch is interrupted (like a phone notification), mark as inactive.
+
+
+-- SECTION: Input Aggregation
+
+-- FUNCTION: getAggregatedInput
+-- PURPOSE: Combines ALL input sources (keyboard, gamepad, touch) into one unified input.
+-- This is the ONLY function the game loop calls to get player input.
+-- RETURNS: An object with moveX (smoothed), rawMoveX (unsmoothed), jump, and dash.
+-- HOW IT WORKS:
+--   set rawX to 0.
+--   set jump to false.
+--   set dash to false.
+--
+--   STEP 1 - Keyboard:
+--     if moveLeft action is pressed then subtract 1 from rawX.
+--     if moveRight action is pressed then add 1 to rawX.
+--     if jump action is pressed then set jump to true.
+--     if dash action is pressed then set dash to true.
+--
+--   STEP 2 - Gamepad (overrides keyboard if present):
+--     if gamepad input exists and stick passes the move threshold then use gamepad moveX.
+--     if gamepad jump is pressed then set jump to true.
+--     if gamepad dash is pressed then set dash to true.
+--     if gamepad start or jump pressed on menu screen then trigger game start.
+--
+--   STEP 3 - Touch (adds to existing input):
+--     if touch left is active then subtract 1 from rawX.
+--     if touch right is active then add 1 to rawX.
+--     if touch jump is active then set jump to true.
+--     if touch dash is active then set dash to true.
+--
+--   STEP 4 - Smoothing:
+--     Apply linear interpolation: smoothedInput.x moves 30 percent toward rawX each frame.
+--     if the smoothed value is very tiny (less than 0.01) then set it to 0 to prevent drift.
+--
+--   The result is clean, unified input regardless of which device the player uses.
