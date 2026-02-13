@@ -167,7 +167,11 @@ function draw() {
     });
 
     // Player
-    Assets.renderPlayer(ctx, player.x, player.y, player.width, player.height, player.vx, player.vy);
+    Assets.renderPlayer(ctx, player.x, player.y, player.width, player.height, {
+        velocity: { x: player.vx, y: player.vy },
+        grounded: player.grounded,
+        state: Math.abs(player.vx) > 0.5 ? 'moving' : 'idle'
+    });
 
     // Particles
     engine.drawParticles(ctx);
@@ -187,11 +191,7 @@ function drawUI(ctx) {
     for(let i=0; i<lives; i++) hearts += '♥';
     ctx.fillText(hearts, 20, 80);
 
-    if (engine.state === 'MENU') {
-        engine.drawOverlay('INFERNO RUN', 'NAVIGATE THE FLAMES', 'PRESS SPACE TO START');
-    } else if (engine.state === 'GAMEOVER') {
-        engine.drawOverlay('GAME OVER', `FINAL SCORE: ${engine.score}`, 'PRESS SPACE TO RESTART');
-    }
+    // engine.drawUI() handles MENU and GAMEOVER overlays automatically
 }
 
 function checkXCollisions() {

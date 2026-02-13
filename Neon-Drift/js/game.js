@@ -175,7 +175,12 @@ engine.start(() => {
     ctx.fill();
 
     // Car
-    Assets.renderPlayer(ctx, car.x - 15, car.y - 12, 30, 24, car.wx, car.wy);
+    Assets.renderPlayer(ctx, car.x - 15, car.y - 12, 30, 24, {
+        rotation: car.angle,
+        velocity: { x: car.wx, y: car.wy },
+        state: Math.abs(car.speed) > 1 ? 'moving' : 'idle',
+        grounded: onTrack
+    });
 
     // Particles
     engine.drawParticles(ctx);

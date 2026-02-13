@@ -8,7 +8,16 @@ const Assets = {
         DANGER: '#ff4400',     // Orange-Red (hazards)
         VOID: '#050505',       // Deep Black (background)
         NEUTRAL: '#ffffff',    // White (high contrast)
-        STEALTH: '#222222'     // Dark Gray (walls/shadows)
+        STEALTH: '#222222',    // Dark Gray (walls/shadows)
+
+        // Lowercase aliases (used by multiple games)
+        primary: '#00ffcc',
+        secondary: '#ff0055',
+        tertiary: '#00ffff',
+        highlight: '#ffcc00',
+        danger: '#ff4400',
+        accent: '#ffcc00',     // Accent color (alias for highlight)
+        neutral: '#ffffff'
     },
 
     // Global Constants

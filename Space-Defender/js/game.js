@@ -80,8 +80,8 @@ function updateBoss(dt, factor) {
         }
     });
 
-    // Collision with player
-    if (rectIntersect(player.x, player.y, player.width, player.height, boss.x, boss.y, boss.width, boss.height)) {
+    // Collision with player (boss may have been destroyed above)
+    if (boss && rectIntersect(player.x, player.y, player.width, player.height, boss.x, boss.y, boss.width, boss.height)) {
         if (!shieldActive) engine.state = 'GAMEOVER';
     }
 }
@@ -287,11 +287,13 @@ engine.start(() => {
                 let dx = (player.x + 20) - (e.x + e.width/2);
                 let dy = (player.y) - (e.y + e.height);
                 let len = Math.hypot(dx, dy);
-                enemyBullets.push({ 
-                    x: e.x + e.width/2, y: e.y + e.height, 
-                    vx: (dx/len) * 3, vy: (dy/len) * 3, 
-                    w: 4, h: 4 
-                });
+                if (len > 0) {
+                    enemyBullets.push({
+                        x: e.x + e.width/2, y: e.y + e.height,
+                        vx: (dx/len) * 3, vy: (dy/len) * 3,
+                        w: 4, h: 4
+                    });
+                }
                 e.shootTimer = 0;
             }
         }
